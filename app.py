@@ -566,7 +566,7 @@ st.markdown('<div class="status-box"><h3>🎤 आवाज़ से सवा�
 col1, col2, col3 = st.columns([1, 2, 1])
 with col2:
 
-audio_file = st.file_uploader("अपनी आवाज़ फ़ाइल अपलोड करें", type=["wav", "mp3","amr"])
+   audio_file = st.file_uploader("अपनी आवाज़ फ़ाइल अपलोड करें", type=["wav", "mp3","amr"])
 
 if audio_file:
     wav_audio_data = audio_file.read()
@@ -855,6 +855,7 @@ st.markdown("""
     </small></p>
 </div>
 """, unsafe_allow_html=True)
+
 
 
 
