@@ -565,9 +565,16 @@ st.markdown('<div class="status-box"><h3>🎤 आवाज़ से सवा�
 
 col1, col2, col3 = st.columns([1, 2, 1])
 with col2:
-    audio_file = st.audio_input("🎙️ रिकॉर्ड करें")
-
-# Process audio
+   audio_file = st.file_uploader(
+    "अपनी आवाज़ अपलोड करें 🎤", 
+    type=["wav", "mp3", "amr"]
+)
+if audio_file is not None:
+   
+    st.audio(audio_bytes, format="audio/wav")
+    
+    st.success("✅ ऑडियो अपलोड हो गया!")
+     time.sleep(5)
 if audio_file and audio_file != st.session_state.last_audio and not st.session_state.processing:
     st.session_state.last_audio = audio_file
     st.session_state.processing = True
@@ -576,9 +583,9 @@ if audio_file and audio_file != st.session_state.last_audio and not st.session_s
         # Step 1: Transcribe (STT)
         with st.spinner("🔄 आवाज़ समझ रहे हैं..."):
            audio_bytes = audio_file.read()
-           unified_audio = {"wav": audio_bytes}
+           
             
-           voice_text = st.session_state.stt.transcribe(unified_audio["wav"], filename="live_audio.wav", language="hi")
+           voice_text = st.session_state.stt.transcribe(audio_bytes, filename="live_audio.wav", language="hi")
             
             
         
@@ -849,6 +856,7 @@ st.markdown("""
     </small></p>
 </div>
 """, unsafe_allow_html=True)
+
 
 
 
