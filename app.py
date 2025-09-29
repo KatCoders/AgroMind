@@ -561,87 +561,68 @@ with st.sidebar:
 # ------------------- Enhanced Groq LLM setup -------------------
 
 # ------------------- Voice Input Section -------------------
-st.markdown('<div class="status-box"><h3>🎤 आवाज़ से सवाल पूछें</h3></div>', unsafe_allow_html=True)
+st.subheader("🎤 आवाज़ से सवाल पूछें")
+st.caption("अपनी आवाज़ की फ़ाइल अपलोड करें (WAV/MP3)")
 
 col1, col2, col3 = st.columns([1, 2, 1])
 with col2:
     audio_file = st.file_uploader("अपनी आवाज़ फ़ाइल अपलोड करें", type=["wav", "mp3"])
 
-def convert_to_wav(file_bytes, file_type):
-    """Convert uploaded audio to WAV format for STT."""
-    audio = None
-    if file_type == "audio/wav":
-        return file_bytes  # already WAV
-    elif file_type in ["audio/mp3", "audio/mpeg"]:
-        audio = AudioSegment.from_file(io.BytesIO(file_bytes), format="mp3")
-    elif file_type == "audio/amr":
-        audio = AudioSegment.from_file(io.BytesIO(file_bytes), format="amr")
-    else:
-        raise ValueError("Unsupported audio format")
-    
-    # Export to WAV in memory
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp_wav:
-        audio.export(tmp_wav.name, format="wav")
-        tmp_wav.flush()
-        with open(tmp_wav.name, "rb") as f:
-            wav_data = f.read()
-        os.unlink(tmp_wav.name)
-        return wav_data
-
 if audio_file:
-    wav_audio_data = convert_to_wav(audio_file.read(), audio_file.type)
-    
+    wav_audio_data = audio_file.read()
     if wav_audio_data != st.session_state.get("last_audio_data"):
         st.session_state["last_audio_data"] = wav_audio_data
-        st.audio(wav_audio_data, format="audio/wav")
-
-    if not st.session_state.get("processing", False):
-        st.session_state.processing = True
-        try:
-            # Save uploaded file temporarily
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp_file:
-                tmp_file.write(wav_audio_data)
-                tmp_file.flush()
-                tmp_path = tmp_file.name
-
+        st.audio(wav_audio_data, format="audio/wav" if audio_file.type=="audio/wav" else "audio/mp3")
+        
+        if not st.session_state.get("processing", False):
+            st.session_state.processing = True
             try:
-                # Transcribe using your existing STT
-                voice_text = st.session_state.stt.transcribe(tmp_path, language="hi")
-            finally:
-                if os.path.exists(tmp_path):
-                    os.unlink(tmp_path)
-
-            # Process transcription
-            if voice_text and voice_text.strip():
-                st.info(f"📝 **{voice_text}**")
-
-                # Save to chat history
-                st.session_state.chat_history.append({
-                    "role": "user",
-                    "content": voice_text,
-                    "type": "voice",
-                    "timestamp": datetime.now().isoformat()
-                })
-
-                # Step 2: Get LLM Response
-                with st.spinner("🤔 जवाब तैयार कर रहे हैं..."):
-                    response = get_llm_response(voice_text)
-
-                # Step 3: Generate TTS
-                if response and len(response) > 0:
-                    with st.spinner("🔊 आवाज़ तैयार कर रहे हैं..."):
-                        audio_bytes = st.session_state.tts_system.generate_audio(response)
-
-                    if audio_bytes:
-                        st.audio(audio_bytes, format="audio/mp3", autoplay=True)
-                        st.success("✅ जवाब तैयार!")
+                # Save uploaded file temporarily
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp_file:
+                    tmp_file.write(wav_audio_data)
+                    tmp_file.flush()
+                    tmp_path = tmp_file.name
+                
+                try:
+                    # Transcribe using your existing STT
+                    voice_text = st.session_state.stt.transcribe(tmp_path, language="hi")
+                finally:
+                    if os.path.exists(tmp_path):
+                        os.unlink(tmp_path)
+                
+                # Process transcription
+                if voice_text and voice_text.strip():
+                    st.info(f"📝 **{voice_text}**")
+                    
+                    # LLM response
+                    with st.spinner("🤖 जवाब तैयार कर रहे हैं..."):
+                        response = get_llm_response(voice_text)
+                    
+                    if response and response.strip():
+                        st.markdown(f"## 🤖 जवाब")
+                        st.markdown(response)
+                        
+                        # TTS
+                        if st.session_state.get("voice_enabled", False):
+                            with st.spinner("🎧 आवाज़ तैयार कर रहे हैं..."):
+                                try:
+                                    audio_bytes = st.session_state.tts_system.generate_audio(response)
+                                    if audio_bytes:
+                                        st.audio(audio_bytes, format="audio/mp3")
+                                        st.success("🔊 तैयार!")
+                                except Exception as tts_error:
+                                    logger.warning(f"TTS failed: {tts_error}")
+                                    st.info("💡 टेक्स्ट पढ़ें")
                     else:
-                        st.info("💡 टेक्स्ट में जवाब देखें (आवाज़ उपलब्ध नहीं)")
-        except Exception as e:
-            st.error(f"❌ त्रुटि: {str(e)}")
-            logger.error(f"Processing error: {e}", exc_info=True)
-        finally:
-            st.session_state.processing = False
+                        st.warning("⚠️ जवाब प्राप्त नहीं हुआ")
+                else:
+                    st.warning("⚠️ आवाज़ स्पष्ट नहीं थी")
+                    
+            except Exception as e:
+                st.error(f"❌ त्रुटि: {str(e)}")
+                logger.error(f"Voice error: {e}", exc_info=True)
+            finally:
+                st.session_state.processing = False
 else:
    st.markdown("""
 <style>
@@ -873,6 +854,7 @@ st.markdown("""
     </small></p>
 </div>
 """, unsafe_allow_html=True)
+
 
 
 
