@@ -573,15 +573,10 @@ if audio_file and audio_file != st.session_state.last_audio and not st.session_s
     st.session_state.processing = True
     
     try:
-        # Display recorded audio
-        st.audio(audio_file, format="audio/wav")
-        
         # Step 1: Transcribe (STT)
         with st.spinner("🔄 आवाज़ समझ रहे हैं..."):
-            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp_file:
-                tmp_file.write(audio_file.read())
-                tmp_file.flush()
-                tmp_path = tmp_file.name
+           audio_bytes = audio_file.read()
+           voice_text = st.session_state.stt.transcribe(audio_bytes, filename="live_audio.wav", language="hi")
             
             try:
                 voice_text = st.session_state.stt.transcribe(tmp_path, language="hi")
@@ -856,3 +851,4 @@ st.markdown("""
     </small></p>
 </div>
 """, unsafe_allow_html=True)
+
