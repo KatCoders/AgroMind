@@ -130,7 +130,7 @@ class SpeechToText:
             with open(file_path, "rb") as audio_file:
                 files = {"file": (os.path.basename(file_path), audio_file, "audio/wav")}
                 data = {
-                    "model": "whisper-large-v3-turbo",
+                    "model": "whisper-large-v3",
                     "language": language,
                     "response_format": "text"
                 }
