@@ -574,7 +574,7 @@ if audio_file is not None:
     st.audio(audio_bytes, format="audio/wav")
     
     st.success("✅ ऑडियो अपलोड हो गया!")
-     time.sleep(5)
+    time.sleep(5)
 if audio_file and audio_file != st.session_state.last_audio and not st.session_state.processing:
     st.session_state.last_audio = audio_file
     st.session_state.processing = True
@@ -856,6 +856,7 @@ st.markdown("""
     </small></p>
 </div>
 """, unsafe_allow_html=True)
+
 
 
 
