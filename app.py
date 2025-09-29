@@ -18,6 +18,7 @@ from voice_pipeline import *
 from st_audiorec import st_audiorec
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import StandardScaler
+from voiceassit import voice_assistant_feature
 
 # Langchain / Groq imports
 from langchain_groq import ChatGroq
@@ -566,6 +567,7 @@ st.caption("अपनी आवाज़ की फ़ाइल अपलोड 
 
 col1, col2, col3 = st.columns([1, 2, 1])
 with col2:
+    voice_assistant_feature()
     audio_file = st.file_uploader("अपनी आवाज़ फ़ाइल अपलोड करें", type=["wav", "mp3"])
 
 if audio_file:
