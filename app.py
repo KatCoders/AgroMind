@@ -255,7 +255,7 @@ st.markdown("""
 # ------------------- Web Geolocation -------------------
 
 def get_location_html():
-    """Generate HTML for client-side browser geolocation only"""
+    """Generate HTML for client-side browser geolocation and update Streamlit session_state"""
     return """
     <div id="location-container">
         <button id="get-location-btn" onclick="getLocation()" 
@@ -280,17 +280,29 @@ def get_location_html():
                 function(position) {
                     const lat = position.coords.latitude;
                     const lng = position.coords.longitude;
-                    const accuracy = position.coords.accuracy;
+                    const accuracy = Math.round(position.coords.accuracy);
 
                     statusDiv.innerHTML = `
                         ✅ स्थान मिल गया!<br>
                         📍 अक्षांश: ${lat.toFixed(4)}<br>
                         📍 देशांतर: ${lng.toFixed(4)}<br>
-                        🎯 सटीकता: ${Math.round(accuracy)}m
+                        🎯 सटीकता: ${accuracy}m
                     `;
-
                     btn.innerHTML = '📍 पुनः स्थान प्राप्त करें';
                     btn.disabled = false;
+
+                    // Send location to Streamlit session_state
+                    const data = {lat: lat, lng: lng, accuracy: accuracy};
+                    const input = document.createElement("input");
+                    input.type = "hidden";
+                    input.name = "html_location";
+                    input.value = JSON.stringify(data);
+                    document.body.appendChild(input);
+
+                    // Trigger Streamlit event to update session_state
+                    if (window.streamlitWebsocket) {
+                        window.streamlitWebsocket.send(JSON.stringify({type: "SET_HTML_LOCATION", value: data}));
+                    }
                 },
                 function(error) {
                     let errorMsg = '';
@@ -319,8 +331,7 @@ def get_location_html():
     }
     </script>
     """
-
-
+st.components.v1.html(get_location_html(), height=150)
 
 
 
@@ -1075,5 +1086,6 @@ st.markdown("""
     </small></p>
 </div>
 """, unsafe_allow_html=True)
+
 
 
