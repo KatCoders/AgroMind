@@ -1,3 +1,4 @@
+
 import os
 import io
 import time
@@ -140,7 +141,7 @@ class SpeechToText:
             with open(file_path, "rb") as audio_file:
                 files = {"file": (os.path.basename(file_path), audio_file, "audio/wav")}
                 data = {
-                    "model": "whisper-large-v3",
+                    "model": "whisper-large-v3-turbo",
                     "language": language,
                     "response_format": "text"
                 }
@@ -286,7 +287,8 @@ def get_location_html():
                         🎯 सटीकता: ${Math.round(accuracy)}m
                     `;
                     
-                    btn.innerHTML = '✅ स्थान प्राप्त हो गया';
+                    btn.innerHTML = '📍 पुनः स्थान प्राप्त करें';
+                    btn.disabled = false;
                 },
                 function(error) {
                     let errorMsg = '';
@@ -304,7 +306,7 @@ def get_location_html():
                             errorMsg = '❌ अज्ञात त्रुटि';
                             break;
                     }
-                    statusDiv.innerHTML = errorMsg + '<br><small>IP आधारित स्थान का उपयोग कर रहे हैं</small>';
+                    statusDiv.innerHTML = errorMsg;
                     btn.innerHTML = '📍 पुनः प्रयास करें';
                     btn.disabled = false;
                 }
@@ -328,27 +330,26 @@ def get_location_html():
 
 # ------------------- Session state initialization -------------------
 def init_session_state():
-    """Initialize all session state variables"""
-    defaults = {
-        "app_initialized": False,
-        "tts_system_ready": False,
-        "stt_warmed": False,
-        "chat_history": [],
-        "processing": False,
-        "last_audio_data": None,
-        "voice_enabled": True,
-        "auto_play_response": True,
-        "use_offline_tts": False, 
-        "location_method": "ip",
-        "html_location": None,
-        "warmup_status": "प्रारंभ कर रहे हैं...",
-        "tts_system": UnifiedTTSSystem(),
-        "stt": SpeechToText()
-    }
+     """Initialize all session state variables"""
+     if "app_initialized" not in st.session_state:
+        st.session_state.update({
+            "app_initialized": False,
+            "tts_system_ready": False,
+            "stt_warmed": False,
+            "chat_history": [],
+            "processing": False,
+            "last_audio_data": None,
+            "voice_enabled": True,
+            "auto_play_response": True,
+            "use_offline_tts": False,
+            "location_method": "ip",
+            "html_location": None,
+            "warmup_status": "प्रारंभ कर रहे हैं...",
+            "tts_system": UnifiedTTSSystem(),
+            "stt": SpeechToText()
+        })
+
     
-    for key, default_value in defaults.items():
-        if key not in st.session_state:
-            st.session_state[key] = default_value
 
 init_session_state()
 
@@ -772,113 +773,73 @@ def get_llm_response(user_question: str) -> str:
 
 
 # ------------------- Streamlit UI -------------------
+# ------------------- Voice Input & LLM Response -------------------
+
 st.markdown('<div class="voice-section">', unsafe_allow_html=True)
 st.subheader("🎤 आवाज़ से सवाल पूछें")
 
 col1, col2, col3 = st.columns([1, 2, 1])
 with col2:
-      wav_audio_data = st_audiorec()
-      st.caption("रिकॉर्ड बटन दो बार और स्टॉप बटन एक बार दबाएं")
+    wav_audio_data = st_audiorec()
+st.caption("रिकॉर्ड बटन दो बार और स्टॉप बटन एक बार दबाएं")
 
-    
-      if wav_audio_data is not None:
-        if wav_audio_data != st.session_state.last_audio_data:
-            st.session_state.last_audio_data = wav_audio_data
-            st.audio(wav_audio_data, format="audio/wav")
-            st.success("🎵 रिकॉर्ड हो गया!")
-        
-        if st.button("🔎 जवाब पाएं", type="primary", disabled=st.session_state.processing):
-            st.session_state.processing = True
-            temp_path = None
+# Only process new recordings
+if wav_audio_data is not None and wav_audio_data != st.session_state.last_audio_data:
+    st.session_state.last_audio_data = wav_audio_data
+    st.audio(wav_audio_data, format="audio/wav")
+    st.success("🎵 रिकॉर्ड हो गया!")
+
+    try:
+        st.session_state.processing = True
+
+        with st.spinner("🔄 समझ रहे हैं..."):
+            # Save audio bytes to a temporary file (required by OpenAI Whisper API)
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp_file:
+                tmp_file.write(wav_audio_data)
+                tmp_file_path = tmp_file.name
+
+            # Use OpenAI Whisper for transcription
             
-            try:
-                # Save temp file
-                with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp:
-                    tmp.write(wav_audio_data)
-                    temp_path = tmp.name
-                
-                # Transcribe
-                with st.spinner("🔄 समझ रहे हैं..."):
-                    voice_text = st.session_state.stt.transcribe(temp_path)
-                
-                if not voice_text:
-                    st.error("❌ आवाज़ स्पष्ट नहीं आई")
-                else:
-                    st.success(f"🗣️ {voice_text}")
-                    
-                    # Get response
-                    with st.spinner("🤖 जवाब तैयार कर रहे हैं..."):
-                        response = get_llm_response(voice_text)
-                    
-                    st.markdown(f"### 🤖 {response}")
-                    
-                    # Save to history
-                    st.session_state.chat_history.append({
-                        "role": "user",
-                        "content": voice_text,
-                        "timestamp": datetime.now().isoformat()
-                    })
-                    
-                    # Generate audio - NO THREADING, direct call
-                    if st.session_state.voice_enabled and response:
-                        with st.spinner("🎧 आवाज़ में तैयार कर रहे हैं..."):
-                            audio_bytes = st.session_state.tts_system.generate_audio(response)
-                            
-                            if audio_bytes:
-                                st.audio(audio_bytes, format="audio/mp3")
-                                st.success("🔊 तैयार!")
-                            else:
-                                st.info("💡 टेक्स्ट पढ़ें")
+            voice_text = st.session_state.stt.transcribe(tmp_file_path, language="hi")
+            os.unlink(tmp_file_path)
+
             
-            except Exception as e:
-                st.error(f"❌ त्रुटि: {str(e)}")
-                logger.error(f"Voice processing error: {e}")
-            finally:
-                if temp_path:
-                    try:
-                        os.unlink(temp_path)
-                    except:
-                        pass
-                st.session_state.processing = False
-st.markdown('</div>', unsafe_allow_html=True)
 
-# ------------------- Enhanced Chat History Display -------------------
-st.subheader("💬 बातचीत का इतिहास")
+        if not voice_text:
+            st.error("❌ आवाज़ स्पष्ट नहीं आई")
+        else:
+            st.success(f"🗣️ {voice_text}")
 
-if st.session_state.chat_history:
-    for i, message in enumerate(st.session_state.chat_history):
-        role = message.get("role")
-        content = message.get("content", "")
-        msg_type = message.get("type", "text")
-        timestamp = message.get("timestamp", "")
+            # Save user message in chat history
+            st.session_state.chat_history.append({
+                "role": "user",
+                "content": voice_text,
+                "type": "voice",
+                "timestamp": datetime.now().isoformat()
+            })
 
-        if role == "user":
-            st.markdown(f'<div class="user-message">', unsafe_allow_html=True)
-            icon = "🎤" if msg_type == "voice" else "✍️"
-            st.markdown(f"**{icon} उपयोगकर्ता:** {content}")
-            if timestamp:
-                st.caption(f"⏰ {timestamp[:19].replace('T', ' ')}")
-            st.markdown('</div>', unsafe_allow_html=True)
+            # Get LLM response
+            with st.spinner("🤖 जवाब तैयार कर रहे हैं..."):
+                response = get_llm_response(voice_text)
+            st.markdown(f"## 🤖 {response}")
 
-        else:  # assistant message
-            st.markdown(f'<div class="assistant-message">', unsafe_allow_html=True)
-            st.markdown(f"**🤖 AI सलाहकार:** {content}")
-            if timestamp:
-                st.caption(f"⏰ {timestamp[:19].replace('T', ' ')}")
+            # Generate TTS using UnifiedTTSSystem
+            if st.session_state.voice_enabled and response:
+                with st.spinner("🎧 आवाज़ में तैयार कर रहे हैं..."):
+                    audio_bytes = st.session_state.tts_system.generate_audio(response)
+                    if audio_bytes:
+                        st.audio(audio_bytes, format="audio/mp3")
+                        st.success("🔊 तैयार!")
+                    else:
+                        st.info("💡 टेक्स्ट पढ़ें")
 
-            # Audio playback button for assistant messages
-            if st.session_state.voice_enabled:
-                col1, col2 = st.columns([1, 4])
-                with col1:
-                    if st.button(f"🔊", key=f"play_audio_{i}", help="इस जवाब को सुनें"):
-                        with st.spinner("🎧 आवाज़ तैयार कर रहे हैं..."):
-                            audio_bytes = st.session_state.tts_system.generate_audio(content)
-                            if audio_bytes:
-                                st.audio(audio_bytes, format="audio/mp3")
+    except Exception as e:
+        st.error(f"❌ त्रुटि: {str(e)}")
+        logger.error(f"Voice processing error: {e}")
+    finally:
+        st.session_state.processing = False
 
-            st.markdown('</div>', unsafe_allow_html=True)
-
-        st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
 else:
    st.markdown("""
