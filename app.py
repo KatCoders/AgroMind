@@ -578,15 +578,11 @@ if audio_file and audio_file != st.session_state.last_audio and not st.session_s
            audio_bytes = audio_file.read()
            voice_text = st.session_state.stt.transcribe(audio_bytes, filename="live_audio.wav", language="hi")
             
-            try:
-                voice_text = st.session_state.stt.transcribe(tmp_path, language="hi")
-            finally:
-                if os.path.exists(tmp_path):
-                    os.unlink(tmp_path)
+            
         
-            if not voice_text:
+        if not voice_text:
               st.warning("⚠️ कृपया स्पष्ट सवाल रिकॉर्ड करें।")
-            else:
+        else:
             # Display transcription
                st.success(f"✅ आपने कहा: **{voice_text}**")
             
