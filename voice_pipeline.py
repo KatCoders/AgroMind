@@ -36,69 +36,74 @@ openai_client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
 
 # ------------------- Unified TTS System -------------------
 class UnifiedTTSSystem:
-    """Unified TTS with OpenAI primary and gTTS fallback"""
+    """Unified TTS with OpenAI primary and gTTS fallback (Cloud-safe)"""
     
     def __init__(self):
         self.openai_available = openai_client is not None
         self.cache = {}
         
     def generate_audio(self, text: str, use_cache: bool = True) -> Optional[bytes]:
-        """Generate audio with fallback"""
+        """Generate audio from text with caching & fallback"""
         if not text or not text.strip():
             return None
         
-        # Truncate long text
+        text = text.strip()
         if len(text) > 500:
             text = self._truncate_intelligently(text, 500)
         
-        # Check cache
+        # 🔁 Cache check
         text_hash = hash(text[:500])
-        if use_cache and text_hash in self.cache:
-            logger.info("Using cached audio")
-            return self.cache[text_hash]
+        if use_cache:
+            cached = self.cache.get(text_hash)
+            if cached:
+                logger.info("✅ Using cached TTS audio")
+                return cached
         
-        # Try OpenAI first
+        # 🔊 Try OpenAI TTS
+        audio_bytes = None
         if self.openai_available:
             audio_bytes = self._openai_tts(text)
-            if audio_bytes:
-                if use_cache and len(self.cache) < 20:
-                    self.cache[text_hash] = audio_bytes
-                return audio_bytes
-            logger.warning("OpenAI TTS failed, using gTTS")
         
-        # Fallback to gTTS
-        audio_bytes = self._gtts_tts(text)
-        if audio_bytes and use_cache and len(self.cache) < 20:
+        # 🔁 Fallback to gTTS if OpenAI fails
+        if audio_bytes is None:
+            logger.warning("⚠️ OpenAI TTS failed, switching to gTTS")
+            audio_bytes = self._gtts_tts(text)
+        
+        # 🧠 Store in cache
+        if use_cache and audio_bytes and len(self.cache) < 20:
             self.cache[text_hash] = audio_bytes
+        
         return audio_bytes
     
     def _openai_tts(self, text: str) -> Optional[bytes]:
-        """OpenAI TTS implementation"""
+        """OpenAI TTS implementation (cloud-ready)"""
         try:
             response = openai_client.audio.speech.create(
                 model="tts-1",
                 voice="alloy",
-                input=text[:4096]
+                input=text[:4096],
             )
             return response.read()
         except Exception as e:
-            logger.error(f"OpenAI TTS error: {e}")
+            logger.error(f"🛑 OpenAI TTS error: {e}")
             return None
     
     def _gtts_tts(self, text: str) -> Optional[bytes]:
-        """gTTS fallback"""
+        """gTTS fallback (stream-safe)"""
         try:
+            if len(text) > 4000:
+                text = text[:4000]  # Prevent long audio timeout on cloud
             tts = gTTS(text=text, lang="hi", slow=False)
             audio_buffer = io.BytesIO()
             tts.write_to_fp(audio_buffer)
             audio_buffer.seek(0)
-            return audio_buffer.getvalue()
+            return audio_buffer.read()
         except Exception as e:
-            logger.error(f"gTTS error: {e}")
+            logger.error(f"🛑 gTTS error: {e}")
             return None
     
     def _truncate_intelligently(self, text: str, max_length: int) -> str:
-        """Truncate at sentence boundaries"""
+        """Truncate intelligently at sentence boundaries"""
         if len(text) <= max_length:
             return text
         
@@ -114,33 +119,37 @@ class UnifiedTTSSystem:
 
 # ------------------- Speech-to-Text -------------------
 class SpeechToText:
-    """STT using Groq Whisper API"""
+    """Speech-to-Text using Groq Whisper API (Cloud-Safe)"""
     
     @staticmethod
-    def transcribe(file_path: str, language: str = "hi") -> str:
-        """Transcribe audio file"""
-        if not os.path.exists(file_path):
-            logger.error(f"Audio file not found: {file_path}")
-            return ""
-        
+    def transcribe(audio_bytes: bytes, filename: str = "audio.wav", language: str = "hi") -> str:
+        """
+        Transcribe audio from in-memory bytes (works with Streamlit Cloud)
+        - audio_bytes: raw audio data from upload or recording
+        - filename: helps API detect file type
+        """
         try:
-            url = "https://api.groq.com/openai/v1/audio/transcriptions"
-            headers = {"Authorization": f"Bearer {GROQ_API_KEY}"}
+            if not audio_bytes or len(audio_bytes) < 1000:
+                logger.error("⚠️ No valid audio data received.")
+                return ""
             
-            with open(file_path, "rb") as audio_file:
-                files = {"file": (os.path.basename(file_path), audio_file, "audio/wav")}
-                data = {
-                    "model": "whisper-large-v3",
-                    "language": language,
-                    "response_format": "text"
-                }
-                response = requests.post(url, headers=headers, data=data, files=files, timeout=45)
+            # Create a file-like object
+            audio_file = io.BytesIO(audio_bytes)
+            audio_file.name = filename  # 🔥 Required for Groq Whisper
             
-            response.raise_for_status()
-            return response.text.strip()
+            # Use OpenAI client (works with Groq too)
+            client = OpenAI(api_key=GROQ_API_KEY, base_url="https://api.groq.com/openai/v1")
+            transcript = client.audio.transcriptions.create(
+                model="whisper-large-v3",
+                file=audio_file,
+                language=language,
+                response_format="text"
+            )
             
+            return transcript.strip()
+        
         except Exception as e:
-            logger.error(f"Transcription error: {e}")
+            logger.error(f"🛑 Transcription error: {e}")
             return ""
 
 
