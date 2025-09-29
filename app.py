@@ -561,7 +561,7 @@ with st.sidebar:
 # ------------------- Enhanced Groq LLM setup -------------------
 
 # ------------------- Voice Input Section -------------------
-t.markdown('<div class="status-box"><h3>🎤 आवाज़ से सवाल पूछें</h3></div>', unsafe_allow_html=True)
+st.markdown('<div class="status-box"><h3>🎤 आवाज़ से सवाल पूछें</h3></div>', unsafe_allow_html=True)
 
 col1, col2, col3 = st.columns([1, 2, 1])
 with col2:
@@ -873,6 +873,7 @@ st.markdown("""
     </small></p>
 </div>
 """, unsafe_allow_html=True)
+
 
 
 
