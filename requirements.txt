@@ -1,26 +1,26 @@
-streamlit
-pandas
-numpy
-scikit-learn
-joblib
-requests
-python-dotenv
-groq
-# Core web & Streamlit
-streamlit
- st_audiorec
+# Web / Streamlit
+streamlit>=1.25.0
+streamlit-webrtc>=0.41.0
 
-# Audio & video processing
-av
-pydub # optional, for more robust audio conversion
-numpy
-pandas
-openai
+# Data handling
+numpy>=1.25.0
+pandas>=2.1.0
+scikit-learn>=1.3.0
+joblib>=1.3.0
 
+# HTTP requests and environment
+requests>=2.31.0
+python-dotenv>=1.0.0
 
-# HTTP requests & environment variables
+# OpenAI / Groq
+openai>=1.0.0
+groq>=0.3.0
 
-# LangChain & Groq
-langchain-groq
-langchain-core
+# LangChain
+langchain-groq>=0.1.0
+langchain-core>=0.1.0
 
+# Audio
+gTTS>=2.3.2
+pydub>=0.25.1
+av>=10.0.0
