@@ -1006,7 +1006,7 @@ def process_text_input(user_input: str):
         if st.session_state.voice_enabled and full_response:
             with st.spinner("🎧 आवाज़ में तैयार कर रहे हैं..."):
                 audio_gen = AudioGenerator(st.session_state.tts_system)
-                audio_bytes = audio_gen.generate(response) 
+                audio_bytes = audio_gen.generate(full_response) 
              
 
                 # Wait for audio to finish generating
@@ -1149,4 +1149,5 @@ st.markdown("""
 </div>
 
 """, unsafe_allow_html=True)
+
 
