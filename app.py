@@ -17,6 +17,8 @@ from gtts import gTTS
 from st_audiorec import st_audiorec
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import StandardScaler
+from streamlit.components.v1 import html
+
 
 # Langchain / Groq imports
 from langchain_groq import ChatGroq
@@ -1073,4 +1075,5 @@ st.markdown("""
     </small></p>
 </div>
 """, unsafe_allow_html=True)
+
 
