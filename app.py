@@ -604,11 +604,11 @@ if audio_file and audio_file != st.session_state.last_audio and not st.session_s
             })
             
             # Step 2: Get LLM Response
-            with st.spinner("🤔 जवाब तैयार कर रहे हैं..."):
+        with st.spinner("🤔 जवाब तैयार कर रहे हैं..."):
                 response = get_llm_response(voice_text)
             
             # Step 3: Generate TTS
-            if response and len(response) > 0:
+        if response and len(response) > 0:
                 with st.spinner("🔊 आवाज़ तैयार कर रहे हैं..."):
                     audio_bytes = st.session_state.tts_system.generate_audio(response)
                 
