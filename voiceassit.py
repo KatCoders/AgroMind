@@ -5,108 +5,72 @@ from st_audiorec import st_audiorec
 from dotenv import load_dotenv
 import requests
 from gtts import gTTS
-from voice_pipeline import get_llm_response  # ✅ your pipeline function
+from voice_pipeline import get_llm_response  # ✅ आपकी LLM पाइपलाइन
 
-# -------------------------------
-# ✅ 1. Load environment variables
-# -------------------------------
+# --- 🔑 Keys लोड करें ---
 load_dotenv()
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "").strip()
 
-# -------------------------------
-# ✅ 2. Streamlit Page Settings
-# -------------------------------
-st.set_page_config(page_title="🎙 Voice Assistant", layout="centered")
-st.title("🎙 Voice Assistant — Whisper + Chat + TTS")
-st.markdown("🎤 बोलें → 🧠 Whisper → 💬 GPT → 🔊 आवाज़ सुने")
 
-# -------------------------------
-# ✅ 3. Audio Recording
-# -------------------------------
-st.subheader("🎙 Step 1 — अपनी आवाज़ रिकॉर्ड करें")
-wav_audio_data = st_audiorec()
+def voice_assistant_feature():
+    """
+    🎙 Fun और compact Voice Assistant feature
+    - रिकॉर्ड आवाज़
+    - ट्रांसक्राइब (Whisper via Groq)
+    - GPT से जवाब
+    - आवाज़ में सुने (gTTS)
+    """
+    st.markdown("# 🎙 बोलो और सुनो — AI वॉइस असिस्टेंट 🚀")
+    st.markdown("🎤 अपनी आवाज़ रिकॉर्ड करें → 🧠 GPT जवाब देगा → 🔊 सुनें")
 
-if wav_audio_data:
-    st.success("✅ रिकॉर्डिंग पूरी हो गई!")
-    st.audio(wav_audio_data, format="audio/wav")
+    # --- 🎙 Record your voice ---
+    audio_bytes = st_audiorec()
+    if audio_bytes:
+        st.audio(audio_bytes, format="audio/wav")
+        
+        # अस्थाई फाइल में सेव
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tfile:
+            tfile.write(audio_bytes)
+            audio_path = tfile.name
 
-    # Save audio in a temp file
-    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tfile:
-        tfile.write(wav_audio_data)
-        audio_path = tfile.name
-
-    if st.button("▶ प्रोसेस करें"):
-        transcript_text = ""
-        assistant_text = ""
-
-        # -------------------------------
-        # ✅ 4. Transcription with Groq Whisper
-        # -------------------------------
-        with st.spinner("🧠 आपकी आवाज़ को टेक्स्ट में बदल रहे हैं..."):
-            try:
-                url = "https://api.groq.com/openai/v1/audio/transcriptions"
-                headers = {"Authorization": f"Bearer {GROQ_API_KEY}"}
-
-                with open(audio_path, "rb") as f:
-                    files = {"file": (os.path.basename(audio_path), f, "audio/wav")}
-                    data = {
-                        "model": "whisper-large-v3-turbo",
-                        "language": "hi",
-                        "response_format": "text",
-                    }
-
-                    resp = requests.post(url, headers=headers, data=data, files=files, timeout=45)
+        if st.button("▶ पूछें AI से"):
+            with st.spinner("🧠 आपकी आवाज़ को समझ रहे हैं..."):
+                transcript = ""
+                try:
+                    url = "https://api.groq.com/openai/v1/audio/transcriptions"
+                    headers = {"Authorization": f"Bearer {GROQ_API_KEY}"}
+                    with open(audio_path, "rb") as f:
+                        files = {"file": (os.path.basename(audio_path), f, "audio/wav")}
+                        data = {"model": "whisper-large-v3-turbo", "language": "hi", "response_format": "text"}
+                        resp = requests.post(url, headers=headers, data=data, files=files, timeout=45)
                     resp.raise_for_status()
-                    transcript_text = resp.text.strip()
-
-            except requests.exceptions.Timeout:
-                st.error("⏱️ सर्वर से जवाब देर से आया। कृपया फिर कोशिश करें।")
-            except Exception as e:
-                st.error(f"❌ ट्रांसक्रिप्शन असफल: {e}")
-
-        # -------------------------------
-        # ✅ 5. LLM Response
-        # -------------------------------
-        if transcript_text:
-            st.subheader("📝 ट्रांसक्रिप्शन")
-            st.write(transcript_text)
-
-            with st.spinner("💬 GPT सोच रहा है..."):
-                try:
-                    assistant_text = get_llm_response(transcript_text)
-                    st.subheader("🤖 असिस्टेंट का जवाब")
-                    st.write(assistant_text)
+                    transcript = resp.text.strip()
                 except Exception as e:
-                    st.error(f"❌ GPT से जवाब नहीं मिला: {e}")
+                    st.error(f"❌ ट्रांसक्रिप्शन असफल: {e}")
 
-        # -------------------------------
-        # ✅ 6. Text-to-Speech (gTTS - Hindi)
-        # -------------------------------
-        if assistant_text:
-            with st.spinner("🎙 जवाब को आवाज़ में बदल रहे हैं..."):
-                try:
-                    tts = gTTS(text=assistant_text, lang="hi", slow=False)
-                    tts_path = tempfile.NamedTemporaryFile(suffix=".mp3", delete=False).name
-                    tts.save(tts_path)
+            if transcript:
+                st.info(f"📝 आपने कहा: {transcript}")
+                with st.spinner("💬 AI जवाब सोच रहा है..."):
+                    try:
+                        response_text = get_llm_response(transcript)
+                    except Exception as e:
+                        st.error(f"❌ AI जवाब नहीं मिला: {e}")
+                        response_text = ""
 
-                    st.success("✅ आवाज़ तैयार है!")
-                    st.audio(tts_path, format="audio/mp3")
+                if response_text:
+                    st.success(f"🤖 AI: {response_text}")
+                    with st.spinner("🎙 जवाब को आवाज़ में बदल रहे हैं..."):
+                        try:
+                            tts = gTTS(text=response_text, lang="hi")
+                            tts_path = tempfile.NamedTemporaryFile(suffix=".mp3", delete=False).name
+                            tts.save(tts_path)
+                            st.audio(tts_path, format="audio/mp3")
+                        except Exception as e:
+                            st.error(f"❌ आवाज़ बनाने में समस्या: {e}")
+            else:
+                st.warning("⚠ कोई ट्रांसक्रिप्शन नहीं मिला।")
+    else:
+        st.info("🎤 रिकॉर्ड बटन दबाएं और बोलें...")
 
-                except Exception as e:
-                    st.error(f"❌ TTS असफल: {e}")
-
-        # 🧹 Clean up temp file
-        try:
-            os.remove(audio_path)
-        except:
-            pass
-
-else:
-    st.info("🎙 ऊपर रिकॉर्ड बटन दबाकर बोलना शुरू करें।")
-
-# -------------------------------
-# ✅ Footer
-# -------------------------------
-st.markdown("---")
-st.caption("✨ Powered by Streamlit + Whisper + GPT + gTTS 🚀 (Optimized for Cloud)")
+    st.markdown("---")
+    st.caption("✨ Whisper + GPT + gTTS से संचालित 🚀")
