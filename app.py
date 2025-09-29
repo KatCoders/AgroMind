@@ -595,12 +595,12 @@ if audio_file:
                     st.info(f"📝 **{voice_text}**")
             
             # Save to chat history
-            st.session_state.chat_history.append({
+              st.session_state.chat_history.append({
                 "role": "user",
                 "content": voice_text,
                 "type": "voice",
                 "timestamp": datetime.now().isoformat()
-            })
+               })
             
             # Step 2: Get LLM Response
         with st.spinner("🤔 जवाब तैयार कर रहे हैं..."):
@@ -855,6 +855,7 @@ st.markdown("""
     </small></p>
 </div>
 """, unsafe_allow_html=True)
+
 
 
 
