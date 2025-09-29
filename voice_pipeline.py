@@ -119,40 +119,31 @@ class UnifiedTTSSystem:
 
 # ------------------- Speech-to-Text -------------------
 class SpeechToText:
-    """Speech-to-Text using Groq Whisper API (Cloud-Safe)"""
+    """Cloud-safe STT"""
     
     @staticmethod
-    def transcribe(audio_bytes: bytes, filename: str = "audio.wav", language: str = "hi") -> str:
-        """
-        Transcribe audio from in-memory bytes (works with Streamlit Cloud)
-        - audio_bytes: raw audio data from upload or recording
-        - filename: helps API detect file type
-        """
+    def transcribe(audio_bytes: bytes, filename: str = "audio.webm", language: str = "hi") -> str:
+        """Transcribe in-memory audio (BytesIO)"""
+       
+        
+        if not audio_bytes or len(audio_bytes) < 1000:
+            return ""
+        
+        audio_file = io.BytesIO(audio_bytes)
+        audio_file.name = filename  # Important for MIME detection
+        
         try:
-            if not audio_bytes or len(audio_bytes) < 1000:
-                logger.error("⚠️ No valid audio data received.")
-                return ""
-            
-            # Create a file-like object
-            audio_file = io.BytesIO(audio_bytes)
-            audio_file.name = filename  # 🔥 Required for Groq Whisper
-            
-            # Use OpenAI client (works with Groq too)
             client = OpenAI(api_key=GROQ_API_KEY, base_url="https://api.groq.com/openai/v1")
             transcript = client.audio.transcriptions.create(
                 model="whisper-large-v3",
                 file=audio_file,
                 language=language,
-                response_format="text"
+                response_format="text",
+                timeout=120
             )
-            
             return transcript.strip()
-        
         except Exception as e:
-            logger.error(f"🛑 Transcription error: {e}")
-            return ""
-
-
+            return f"STT Error: {e}"
 
 # ------------------- Session State -------------------
 def init_session_state():
@@ -262,3 +253,4 @@ def get_llm_response(user_question: str) -> str:
         return "क्षमा करें, जवाब नहीं दे पा रहा हूँ। कृपया फिर से प्रयास करें।"
 
 # ------------------- Voice Input Section -------------------
+
