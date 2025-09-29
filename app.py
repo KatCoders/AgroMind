@@ -1006,11 +1006,11 @@ def process_text_input(user_input: str):
         if st.session_state.voice_enabled and full_response:
             with st.spinner("🎧 आवाज़ में तैयार कर रहे हैं..."):
                 audio_gen = AudioGenerator(st.session_state.tts_system)
-                thread = Thread(target=audio_gen.generate, args=(full_response,), daemon=True)
-                thread.start()
+                audio_bytes = audio_gen.generate(response) 
+             
 
                 # Wait for audio to finish generating
-                audio_bytes = audio_gen.get_result(timeout=15.0)
+                audio_bytes = audio_gen.get_result(timeout=30.0)
 
                 if audio_bytes:
                     st.audio(audio_bytes, format="audio/mp3", autoplay=st.session_state.auto_play_response)
@@ -1149,3 +1149,4 @@ st.markdown("""
 </div>
 
 """, unsafe_allow_html=True)
+
