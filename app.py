@@ -595,16 +595,14 @@ if audio_file:
                     st.info(f"📝 **{voice_text}**")
                     
                     # LLM response
-                    with st.spinner("🤖 जवाब तैयार कर रहे हैं..."):
+                with st.spinner("🤖 जवाब तैयार कर रहे हैं..."):
                         response = get_llm_response(voice_text)
                     
-                    if response and response.strip():
-                        st.markdown(f"## 🤖 जवाब")
-                        st.markdown(response)
+                
                         
                         # TTS
-                        if st.session_state.get("voice_enabled", False):
-                            with st.spinner("🎧 आवाज़ तैयार कर रहे हैं..."):
+                if st.session_state.get("voice_enabled", False):
+                     with st.spinner("🎧 आवाज़ तैयार कर रहे हैं..."):
                                 try:
                                     audio_bytes = st.session_state.tts_system.generate_audio(response)
                                     if audio_bytes:
@@ -613,8 +611,7 @@ if audio_file:
                                 except Exception as tts_error:
                                     logger.warning(f"TTS failed: {tts_error}")
                                     st.info("💡 टेक्स्ट पढ़ें")
-                    else:
-                        st.warning("⚠️ जवाब प्राप्त नहीं हुआ")
+                          
                 else:
                     st.warning("⚠️ आवाज़ स्पष्ट नहीं थी")
                     
@@ -623,6 +620,7 @@ if audio_file:
                 logger.error(f"Voice error: {e}", exc_info=True)
             finally:
                 st.session_state.processing = False
+
 else:
    st.markdown("""
 <style>
@@ -854,19 +852,3 @@ st.markdown("""
     </small></p>
 </div>
 """, unsafe_allow_html=True)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
