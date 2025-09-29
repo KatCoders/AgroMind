@@ -1,4 +1,3 @@
-
 import os
 import io
 import time
@@ -11,10 +10,9 @@ import streamlit as st
 import logging
 from typing import Optional, Tuple, Dict, Any
 from datetime import datetime
-from threading import Thread,Event
 from openai import OpenAI
 from dotenv import load_dotenv
-
+from gtts import gTTS
 from st_audiorec import st_audiorec
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import StandardScaler
@@ -163,33 +161,6 @@ class SpeechToText:
         except Exception as e:
             logger.error(f"Unexpected transcription error: {e}")
             return ""
-
-# ------------------- Audio Generator with Thread Safety -------------------
-class AudioGenerator:
-    """Thread-safe audio generator"""
-    def __init__(self, tts_system: UnifiedTTSSystem):
-        self.tts_system = tts_system
-        self.result = None
-        self.error = None
-        self.done = Event()
-    
-    def generate(self, text: str):
-        """Generate audio in thread"""
-        try:
-            self.result = self.tts_system.generate_audio(text)
-        except Exception as e:
-            self.error = e
-            logger.error(f"Audio generation thread error: {e}")
-        finally:
-            self.done.set()
-    
-    def get_result(self, timeout: float = 15.0) -> Optional[bytes]:
-        """Wait for result with timeout"""
-        if self.done.wait(timeout):
-            return self.result
-        logger.warning("Audio generation timed out")
-        return None
-
 
 
 # ------------------- Page config & Enhanced CSS -------------------
@@ -720,7 +691,7 @@ with st.sidebar:
 
 # ------------------- Enhanced Groq LLM setup -------------------
 try:
-    MODEL_NAME = "openai/gpt-oss-20B"
+    MODEL_NAME = "llama-3.3-70b-versatile"
     llm = ChatGroq(
         groq_api_key=GROQ_API_KEY,
         model_name=MODEL_NAME,
@@ -848,17 +819,13 @@ with col2:
                         "timestamp": datetime.now().isoformat()
                     })
                     
-                    # Generate audio
+                    # Generate audio - NO THREADING, direct call
                     if st.session_state.voice_enabled and response:
                         with st.spinner("🎧 आवाज़ में तैयार कर रहे हैं..."):
-                            audio_gen = AudioGenerator(st.session_state.tts_system)
-                            thread = Thread(target=audio_gen.generate, args=(response,), daemon=True)
-                            thread.start()
-                            
-                            audio_bytes = audio_gen.get_result(timeout=15.0)
+                            audio_bytes = st.session_state.tts_system.generate_audio(response)
                             
                             if audio_bytes:
-                                st.audio(audio_bytes, format="audio/mp3", autoplay=st.session_state.auto_play_response)
+                                st.audio(audio_bytes, format="audio/mp3")
                                 st.success("🔊 तैयार!")
                             else:
                                 st.info("💡 टेक्स्ट पढ़ें")
@@ -929,13 +896,13 @@ else:
 .chat-container h4 {
     font-size: 1.8rem;
     margin-bottom: 10px;
-    color: #00FF7F; /* 🌿 हल्का हरा टाइटल */
+    color: #00FF7F;
 }
 .chat-container ul li {
     margin-bottom: 5px;
 }
 .chat-container em {
-    color: #FFD700; /* 🌟 सुनहरा रंग (emphasis text) */
+    color: #FFD700;
 }
 </style>
 
@@ -1003,17 +970,13 @@ def process_text_input(user_input: str):
             "timestamp": datetime.now().isoformat()
         })
     
+        # Generate audio - NO THREADING, direct call
         if st.session_state.voice_enabled and full_response:
             with st.spinner("🎧 आवाज़ में तैयार कर रहे हैं..."):
-                audio_gen = AudioGenerator(st.session_state.tts_system)
-                audio_bytes = audio_gen.generate(full_response) 
-             
-
-                # Wait for audio to finish generating
-                audio_bytes = audio_gen.get_result(timeout=30.0)
+                audio_bytes = st.session_state.tts_system.generate_audio(full_response)
 
                 if audio_bytes:
-                    st.audio(audio_bytes, format="audio/mp3", autoplay=st.session_state.auto_play_response)
+                    st.audio(audio_bytes, format="audio/mp3")
                     st.success("🔊 तैयार!")
                 else:
                     st.info("💡 टेक्स्ट जवाब तैयार है, लेकिन आवाज़ नहीं बनाई जा सकी।")
@@ -1147,7 +1110,4 @@ st.markdown("""
         महत्वपूर्ण कृषि निर्णयों के लिए स्थानीय कृषि विशेषज्ञ से परामर्श अवश्य लें।
     </small></p>
 </div>
-
 """, unsafe_allow_html=True)
-
-
