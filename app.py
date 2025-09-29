@@ -14,7 +14,7 @@ from datetime import datetime
 from threading import Thread,Event
 from openai import OpenAI
 from dotenv import load_dotenv
-from gtts import gTTS
+
 from st_audiorec import st_audiorec
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import StandardScaler
@@ -1147,4 +1147,5 @@ st.markdown("""
         महत्वपूर्ण कृषि निर्णयों के लिए स्थानीय कृषि विशेषज्ञ से परामर्श अवश्य लें।
     </small></p>
 </div>
+
 """, unsafe_allow_html=True)
