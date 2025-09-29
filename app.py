@@ -565,35 +565,34 @@ st.markdown('<div class="status-box"><h3>🎤 आवाज़ से सवा�
 
 col1, col2, col3 = st.columns([1, 2, 1])
 with col2:
-   audio_file = st.file_uploader(
-    "अपनी आवाज़ अपलोड करें 🎤", 
-    type=["wav", "mp3", "amr"]
-)
-if audio_file is not None:
-    audio_bytes = audio_file.read()
-    st.audio(audio_bytes, format="audio/wav")
-    
-    st.success("✅ ऑडियो अपलोड हो गया!")
-    time.sleep(5)
-if audio_file and audio_file != st.session_state.last_audio and not st.session_state.processing:
-    st.session_state.last_audio = audio_file
-    st.session_state.processing = True
-    
-    try:
-        # Step 1: Transcribe (STT)
-        with st.spinner("🔄 आवाज़ समझ रहे हैं..."):
-           audio_bytes = audio_file.read()
-           
-            
-           voice_text = st.session_state.stt.transcribe(audio_bytes, filename="live_audio.wav", language="hi")
-            
-            
+
+audio_file = st.file_uploader("अपनी आवाज़ फ़ाइल अपलोड करें", type=["wav", "mp3","amr"])
+
+if audio_file:
+    wav_audio_data = audio_file.read()
+    if wav_audio_data != st.session_state.get("last_audio_data"):
+        st.session_state["last_audio_data"] = wav_audio_data
+        st.audio(wav_audio_data, format="audio/wav" if audio_file.type=="audio/wav" else "audio/mp3")
         
-        if not voice_text:
-            st.warning("⚠️ कृपया स्पष्ट सवाल रिकॉर्ड करें।")
-        else:
-            # Display transcription
-            st.success(f"✅ आपने कहा: **{voice_text}**")
+        if not st.session_state.get("processing", False):
+            st.session_state.processing = True
+            try:
+                # Save uploaded file temporarily
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp_file:
+                    tmp_file.write(wav_audio_data)
+                    tmp_file.flush()
+                    tmp_path = tmp_file.name
+                
+                try:
+                    # Transcribe using your existing STT
+                    voice_text = st.session_state.stt.transcribe(tmp_path, language="hi")
+                finally:
+                    if os.path.exists(tmp_path):
+                        os.unlink(tmp_path)
+                
+                # Process transcription
+                if voice_text and voice_text.strip():
+                    st.info(f"📝 **{voice_text}**")
             
             # Save to chat history
             st.session_state.chat_history.append({
@@ -856,6 +855,7 @@ st.markdown("""
     </small></p>
 </div>
 """, unsafe_allow_html=True)
+
 
 
 
