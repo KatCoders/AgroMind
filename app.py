@@ -14,11 +14,10 @@ from datetime import datetime
 from openai import OpenAI
 from dotenv import load_dotenv
 from gtts import gTTS
+from voice_pipeline import *
 from st_audiorec import st_audiorec
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import StandardScaler
-from streamlit.components.v1 import html
-
 
 # Langchain / Groq imports
 from langchain_groq import ChatGroq
@@ -30,140 +29,7 @@ logger = logging.getLogger(__name__)
 
 # ------------------- Load environment variables -------------------
 load_dotenv()
-GROQ_API_KEY = os.getenv("GROQ_API_KEY", "").strip()
 WEATHER_API_KEY = os.getenv("WEATHER_API_KEY", "").strip()
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "").strip()
-
-# Enhanced validation
-if not GROQ_API_KEY:
-    st.error("❌ .env फ़ाइल में `GROQ_API_KEY` सेट करें — यह LLM और स्पीच APIs के लिए आवश्यक है।")
-    st.info("💡 Groq API key प्राप्त करने के लिए https://console.groq.com पर जाएं")
-    st.stop()
-
-if not OPENAI_API_KEY:
-    logger.warning("⚠️ OPENAI_API_KEY not set. Voice responses will use gTTS fallback.")
-
-# Initialize OpenAI client
-openai_client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
-class UnifiedTTSSystem:
-    """Unified TTS system with OpenAI primary and gTTS fallback"""
-    def __init__(self):
-        self.openai_available = openai_client is not None
-        self.gtts_available = True
-        self.cache = {}  # Simple audio cache
-        
-    def generate_audio(self, text: str, use_cache: bool = True) -> Optional[bytes]:
-        """Generate audio with primary/fallback logic"""
-        if not text or not text.strip():
-            return None
-            
-        # Check cache
-        text_hash = hash(text[:500])  # Cache key
-        if use_cache and text_hash in self.cache:
-            logger.info("Using cached audio")
-            return self.cache[text_hash]
-        
-        # Truncate long text
-        if len(text) > 500:
-            text = self._truncate_intelligently(text, 500)
-        
-        # Try OpenAI first
-        if self.openai_available:
-            audio_bytes = self._openai_tts(text)
-            if audio_bytes:
-                if use_cache and len(self.cache) < 20:
-                    self.cache[text_hash] = audio_bytes
-                return audio_bytes
-            logger.warning("OpenAI TTS failed, falling back to gTTS")
-        
-        # Fallback to gTTS
-        if self.gtts_available:
-            audio_bytes = self._gtts_tts(text)
-            if audio_bytes and use_cache and len(self.cache) < 20:
-                self.cache[text_hash] = audio_bytes
-            return audio_bytes
-        
-        return None
-    
-    def _openai_tts(self, text: str) -> Optional[bytes]:
-        """OpenAI TTS implementation"""
-        try:
-            response = openai_client.audio.speech.create(
-                model="tts-1",  # FIXED: correct model name
-                voice="alloy",
-                input=text[:4096]  # OpenAI limit
-            )
-            return response.read()
-        except Exception as e:
-            logger.error(f"OpenAI TTS failed: {e}")
-            return None
-    
-    def _gtts_tts(self, text: str) -> Optional[bytes]:
-        """gTTS fallback implementation"""
-        try:
-            tts = gTTS(text=text, lang="hi", slow=False)
-            audio_buffer = io.BytesIO()
-            tts.write_to_fp(audio_buffer)
-            audio_buffer.seek(0)
-            return audio_buffer.getvalue()
-        except Exception as e:
-            logger.error(f"gTTS failed: {e}")
-            return None
-    
-    def _truncate_intelligently(self, text: str, max_length: int) -> str:
-        """Truncate text at sentence boundaries"""
-        if len(text) <= max_length:
-            return text
-        
-        sentences = text.split('।')
-        truncated = ""
-        for sentence in sentences:
-            if len(truncated + sentence + "।") <= max_length:
-                truncated += sentence + "।"
-            else:
-                break
-        
-        return truncated if truncated else text[:max_length] + "..."
-
-# ------------------- Speech-to-Text -------------------
-class SpeechToText:
-    """Enhanced speech-to-text with error handling"""
-    
-    @staticmethod
-    def transcribe(file_path: str, language: str = "hi") -> str:
-        """Transcribe audio file using Groq Whisper API"""
-        if not os.path.exists(file_path):
-            logger.error(f"Audio file not found: {file_path}")
-            return ""
-        
-        try:
-            url = "https://api.groq.com/openai/v1/audio/transcriptions"
-            headers = {"Authorization": f"Bearer {GROQ_API_KEY}"}
-            
-            with open(file_path, "rb") as audio_file:
-                files = {"file": (os.path.basename(file_path), audio_file, "audio/wav")}
-                data = {
-                    "model": "whisper-large-v3-turbo",
-                    "language": language,
-                    "response_format": "text"
-                }
-                response = requests.post(
-                    url, 
-                    headers=headers, 
-                    data=data, 
-                    files=files, 
-                    timeout=45
-                )
-            
-            response.raise_for_status()
-            return response.text.strip()
-            
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Transcription API error: {e}")
-            return ""
-        except Exception as e:
-            logger.error(f"Unexpected transcription error: {e}")
-            return ""
 
 
 # ------------------- Page config & Enhanced CSS -------------------
@@ -255,7 +121,7 @@ st.markdown("""
 # ------------------- Web Geolocation -------------------
 
 def get_location_html():
-    """Generate HTML for client-side browser geolocation and update Streamlit session_state"""
+    """Generate HTML for browser geolocation"""
     return """
     <div id="location-container">
         <button id="get-location-btn" onclick="getLocation()" 
@@ -271,38 +137,25 @@ def get_location_html():
     function getLocation() {
         const statusDiv = document.getElementById('location-status');
         const btn = document.getElementById('get-location-btn');
-
+        
         if (navigator.geolocation) {
             btn.innerHTML = '⏳ स्थान प्राप्त कर रहे हैं...';
             btn.disabled = true;
-
+            
             navigator.geolocation.getCurrentPosition(
                 function(position) {
                     const lat = position.coords.latitude;
                     const lng = position.coords.longitude;
-                    const accuracy = Math.round(position.coords.accuracy);
-
+                    const accuracy = position.coords.accuracy;
+                    
                     statusDiv.innerHTML = `
                         ✅ स्थान मिल गया!<br>
                         📍 अक्षांश: ${lat.toFixed(4)}<br>
                         📍 देशांतर: ${lng.toFixed(4)}<br>
-                        🎯 सटीकता: ${accuracy}m
+                        🎯 सटीकता: ${Math.round(accuracy)}m
                     `;
-                    btn.innerHTML = '📍 पुनः स्थान प्राप्त करें';
-                    btn.disabled = false;
-
-                    // Send location to Streamlit session_state
-                    const data = {lat: lat, lng: lng, accuracy: accuracy};
-                    const input = document.createElement("input");
-                    input.type = "hidden";
-                    input.name = "html_location";
-                    input.value = JSON.stringify(data);
-                    document.body.appendChild(input);
-
-                    // Trigger Streamlit event to update session_state
-                    if (window.streamlitWebsocket) {
-                        window.streamlitWebsocket.send(JSON.stringify({type: "SET_HTML_LOCATION", value: data}));
-                    }
+                    
+                    btn.innerHTML = '✅ स्थान प्राप्त हो गया';
                 },
                 function(error) {
                     let errorMsg = '';
@@ -320,7 +173,7 @@ def get_location_html():
                             errorMsg = '❌ अज्ञात त्रुटि';
                             break;
                     }
-                    statusDiv.innerHTML = errorMsg;
+                    statusDiv.innerHTML = errorMsg + '<br><small>IP आधारित स्थान का उपयोग कर रहे हैं</small>';
                     btn.innerHTML = '📍 पुनः प्रयास करें';
                     btn.disabled = false;
                 }
@@ -331,7 +184,7 @@ def get_location_html():
     }
     </script>
     """
-st.components.v1.html(get_location_html(), height=150)
+
 
 
 
@@ -353,6 +206,7 @@ def init_session_state():
             "chat_history": [],
             "processing": False,
             "last_audio_data": None,
+            "last_audio": None,
             "voice_enabled": True,
             "auto_play_response": True,
             "use_offline_tts": False,
@@ -705,151 +559,72 @@ with st.sidebar:
     st.markdown(f"विश्वास स्तर: :{confidence_color}[{confidence:.1f}%]")
 
 # ------------------- Enhanced Groq LLM setup -------------------
-try:
-    MODEL_NAME = "llama-3.3-70b-versatile"
-    llm = ChatGroq(
-        groq_api_key=GROQ_API_KEY,
-        model_name=MODEL_NAME,
-        temperature=0.7,
-        streaming=True,
-        max_tokens=1024
-    )
 
-    # Enhanced prompt template with context
-    template_text = """
-आप एक अनुभवी और दोस्ताना किसान मित्र हैं जो कृषि सलाहकार का काम करते हैं। 
-Agar koi aap se puche apko kisne banaya, to kaho "AgroMind team ne, jo aapke kisan bhaiyon ke liye best AI assistant banane mein laga hai".
-
-आपकी विशेषताएं:
-- हमेशा सरल, समझने योग्य हिंदी में बात करना
-- स्थानीय परिस्थितियों (मौसम, मिट्टी) के अनुसार व्यावहारिक सलाह देना  
-- "भाई", "जी", "आइए" जैसे दोस्ताना शब्दों का उपयोग करना
-- छोटे, actionable steps में जवाब देना
-
-वर्तमान स्थानीय डेटा:
-- स्थान: {location}
-- तापमान: {temperature}°C, आर्द्रता: {humidity}%
-- मिट्टी pH: {soil_ph}, नाइट्रोजन: {nitrogen}
-- AI सुझाव: {crop_suggestion} (विश्वास: {confidence:.1f}%)
-
-नियम:
-1. यदि मार्केट रेट/मंडी भाव पूछें तो कहें: "यह सुविधा अभी विकास में है, जल्द ही उपलब्ध होगी"
-2. फसल सुझाव के लिए ऊपर दिए गए स्थानीय डेटा का उपयोग करें
-3. हमेशा प्रैक्टिकल और लागू करने योग्य सलाह दें
-4. अगर कोई चिकित्सा सलाह पूछे तो डॉक्टर से मिलने को कहें
-Aur jis salwal ka jawab aapko nahi pata, usme aap seedha "मुझे खेद है, मैं इस बारे में जानकारी नहीं दे सकता। कृपया विशेषज्ञ से संपर्क करें।" keh dena.
-
-उपयोगकर्ता का सवाल: {question}
-"""
-
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", template_text),
-        ("user", "{question}")
-    ])
-    chain = prompt | llm | StrOutputParser()
-    
-except Exception as e:
-    st.error(f"❌ LLM मॉडल लोड करने में समस्या: {e}")
-    st.info("कृपया अपनी इंटरनेट कनेक्शन और GROQ_API_KEY की जांच करें")
-    st.stop()
-# ------------------- LLM Response Function -------------------
-def get_llm_response(user_question: str) -> str:
-    """Generate LLM response"""
-    if not user_question.strip():
-        return "कृपया सवाल लिखें।"
-    
-    try:
-        full_response = ""
-        for chunk in chain.stream({
-            "question": user_question,
-            "location": city,
-            "temperature": weather_data['temperature'],
-            "humidity": weather_data['humidity'],
-            "soil_ph": soil_data['ph'],
-            "nitrogen": soil_data['nitrogen'],
-            "crop_suggestion": predicted_crop,
-            "confidence": confidence
-        }):
-            full_response += chunk
-        
-        st.session_state.chat_history.append({
-            "role": "assistant",
-            "content": full_response,
-            "timestamp": datetime.now().isoformat()
-        })
-        
-        return full_response
-    except Exception as e:
-        logger.error(f"LLM error: {e}")
-        return "क्षमा करें, जवाब नहीं दे पा रहा हूँ।"
-
-
-
-
-
-# ------------------- Voice Input & LLM Response -------------------
-st.subheader("🎤 आवाज़ से सवाल पूछें")
-st.caption("अपनी आवाज़ की फ़ाइल अपलोड करें (WAV/MP3)")
+# ------------------- Voice Input Section -------------------
+st.markdown('<div class="status-box"><h3>🎤 आवाज़ से सवाल पूछें</h3></div>', unsafe_allow_html=True)
 
 col1, col2, col3 = st.columns([1, 2, 1])
 with col2:
-    audio_file = st.file_uploader("अपनी आवाज़ फ़ाइल अपलोड करें", type=["wav", "mp3"])
+    audio_file = st.audio_input("🎙️ रिकॉर्ड करें")
 
-if audio_file:
-    wav_audio_data = audio_file.read()
-    if wav_audio_data != st.session_state.get("last_audio_data"):
-        st.session_state["last_audio_data"] = wav_audio_data
-        st.audio(wav_audio_data, format="audio/wav" if audio_file.type=="audio/wav" else "audio/mp3")
+# Process audio
+if audio_file and audio_file != st.session_state.last_audio and not st.session_state.processing:
+    st.session_state.last_audio = audio_file
+    st.session_state.processing = True
+    
+    try:
+        # Display recorded audio
+        st.audio(audio_file, format="audio/wav")
         
-        if not st.session_state.get("processing", False):
-            st.session_state.processing = True
+        # Step 1: Transcribe (STT)
+        with st.spinner("🔄 आवाज़ समझ रहे हैं..."):
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp_file:
+                tmp_file.write(audio_file.read())
+                tmp_file.flush()
+                tmp_path = tmp_file.name
+            
             try:
-                # Save uploaded file temporarily
-                with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp_file:
-                    tmp_file.write(wav_audio_data)
-                    tmp_file.flush()
-                    tmp_path = tmp_file.name
-                
-                try:
-                    # Transcribe using your existing STT
-                    voice_text = st.session_state.stt.transcribe(tmp_path, language="hi")
-                finally:
-                    if os.path.exists(tmp_path):
-                        os.unlink(tmp_path)
-                
-                # Process transcription
-                if voice_text and voice_text.strip():
-                    st.info(f"📝 **{voice_text}**")
-                    
-                    # LLM response
-                    with st.spinner("🤖 जवाब तैयार कर रहे हैं..."):
-                        response = get_llm_response(voice_text)
-                    
-                    if response and response.strip():
-                        st.markdown(f"## 🤖 जवाब")
-                        st.markdown(response)
-                        
-                        # TTS
-                        if st.session_state.get("voice_enabled", False):
-                            with st.spinner("🎧 आवाज़ तैयार कर रहे हैं..."):
-                                try:
-                                    audio_bytes = st.session_state.tts_system.generate_audio(response)
-                                    if audio_bytes:
-                                        st.audio(audio_bytes, format="audio/mp3")
-                                        st.success("🔊 तैयार!")
-                                except Exception as tts_error:
-                                    logger.warning(f"TTS failed: {tts_error}")
-                                    st.info("💡 टेक्स्ट पढ़ें")
-                    else:
-                        st.warning("⚠️ जवाब प्राप्त नहीं हुआ")
-                else:
-                    st.warning("⚠️ आवाज़ स्पष्ट नहीं थी")
-                    
-            except Exception as e:
-                st.error(f"❌ त्रुटि: {str(e)}")
-                logger.error(f"Voice error: {e}", exc_info=True)
+                voice_text = st.session_state.stt.transcribe(tmp_path, language="hi")
             finally:
-                st.session_state.processing = False
+                if os.path.exists(tmp_path):
+                    os.unlink(tmp_path)
+        
+        if not voice_text:
+            st.warning("⚠️ कृपया स्पष्ट सवाल रिकॉर्ड करें।")
+        else:
+            # Display transcription
+            st.success(f"✅ आपने कहा: **{voice_text}**")
+            
+            # Save to chat history
+            st.session_state.chat_history.append({
+                "role": "user",
+                "content": voice_text,
+                "type": "voice",
+                "timestamp": datetime.now().isoformat()
+            })
+            
+            # Step 2: Get LLM Response
+            with st.spinner("🤔 जवाब तैयार कर रहे हैं..."):
+                response = get_llm_response(voice_text)
+            
+            # Step 3: Generate TTS
+            if response and len(response) > 0:
+                with st.spinner("🔊 आवाज़ तैयार कर रहे हैं..."):
+                    audio_bytes = st.session_state.tts_system.generate_audio(response)
+                
+                if audio_bytes:
+                    st.audio(audio_bytes, format="audio/mp3", autoplay=True)
+                    st.success("✅ जवाब तैयार!")
+                else:
+                    st.info("💡 टेक्स्ट में जवाब देखें (आवाज़ उपलब्ध नहीं)")
+    
+    except Exception as e:
+        st.error(f"❌ त्रुटि: {str(e)}")
+        logger.error(f"Processing error: {e}", exc_info=True)
+    
+    finally:
+        st.session_state.processing = False
+
 else:
    st.markdown("""
 <style>
@@ -1081,9 +856,3 @@ st.markdown("""
     </small></p>
 </div>
 """, unsafe_allow_html=True)
-
-
-
-
-
-
