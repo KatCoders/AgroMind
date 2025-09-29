@@ -581,10 +581,10 @@ if audio_file and audio_file != st.session_state.last_audio and not st.session_s
             
         
         if not voice_text:
-              st.warning("⚠️ कृपया स्पष्ट सवाल रिकॉर्ड करें।")
+            st.warning("⚠️ कृपया स्पष्ट सवाल रिकॉर्ड करें।")
         else:
             # Display transcription
-               st.success(f"✅ आपने कहा: **{voice_text}**")
+            st.success(f"✅ आपने कहा: **{voice_text}**")
             
             # Save to chat history
             st.session_state.chat_history.append({
@@ -847,4 +847,5 @@ st.markdown("""
     </small></p>
 </div>
 """, unsafe_allow_html=True)
+
 
