@@ -797,87 +797,57 @@ with col2:
 
 if wav_audio_data and wav_audio_data != st.session_state.get("last_audio_data"):
     st.session_state["last_audio_data"] = wav_audio_data
-    
-    # Show audio preview
     st.audio(wav_audio_data, format="audio/wav")
-    st.success("🎵 रिकॉर्डिंग प्राप्त हो गई!")
     
-    # Prevent duplicate processing
     if not st.session_state.get("processing", False):
         st.session_state.processing = True
-        
         try:
-            # Step 1: Transcribe audio
+            # Transcribe audio
             with st.spinner("🔄 आवाज़ समझ रहे हैं..."):
                 with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp_file:
                     tmp_file.write(wav_audio_data)
+                    tmp_file.flush()
                     tmp_path = tmp_file.name
                 
                 try:
                     voice_text = st.session_state.stt.transcribe(tmp_path, language="hi")
                 finally:
-                    # Clean up temp file
                     if os.path.exists(tmp_path):
                         os.unlink(tmp_path)
             
-            # Validate transcription
-            if not voice_text or not voice_text.strip():
-                st.warning("⚠️ आवाज़ स्पष्ट नहीं थी। कृपया फिर से कोशिश करें।")
-                st.session_state.processing = False
-                st.rerun()
-            
-            st.info(f"📝 आपने कहा: **{voice_text}**")
-            
-            # Step 2: Add to chat history
-            st.session_state.chat_history.append({
-                "role": "user",
-                "content": voice_text,
-                "type": "voice",
-                "timestamp": datetime.now().isoformat()
-            })
-            
-            # Step 3: Get LLM response
-            with st.spinner("🤖 जवाब तैयार कर रहे हैं..."):
-                response = get_llm_response(voice_text)
-            
-            # Validate response
-            if not response or not response.strip():
-                st.error("❌ जवाब प्राप्त नहीं हो सका। कृपया फिर से कोशिश करें।")
-                st.session_state.processing = False
-                st.rerun()
-            
-            # Display response
-            st.markdown(f"## 🤖 जवाब")
-            st.markdown(response)
-            
-            # Step 4: Generate TTS if enabled
-            if st.session_state.get("voice_enabled", False) and response:
-                with st.spinner("🎧 आवाज़ तैयार कर रहे हैं..."):
-                    try:
-                        audio_bytes = st.session_state.tts_system.generate_audio(response)
-                        if audio_bytes:
-                            st.audio(audio_bytes, format="audio/mp3")
-                            st.success("🔊 आवाज़ तैयार!")
-                        else:
-                            st.info("💡 आवाज़ उपलब्ध नहीं। कृपया टेक्स्ट पढ़ें।")
-                    except Exception as tts_error:
-                        logger.warning(f"TTS generation failed: {tts_error}")
-                        st.info("💡 आवाज़ उपलब्ध नहीं। कृपया टेक्स्ट पढ़ें।")
-            
-            # Reset processing flag before rerun
-            st.session_state.processing = False
-            st.rerun()
-            
+            # Process if transcription successful
+            if voice_text and voice_text.strip():
+                st.info(f"📝 **{voice_text}**")
+                
+                # Get LLM response
+                with st.spinner("🤖 जवाब तैयार कर रहे हैं..."):
+                    response = get_llm_response(voice_text)
+                
+                if response and response.strip():
+                    st.markdown(f"## 🤖 जवाब")
+                    st.markdown(response)
+                    
+                    # Generate TTS if enabled
+                    if st.session_state.get("voice_enabled", False):
+                        with st.spinner("🎧 आवाज़ तैयार कर रहे हैं..."):
+                            try:
+                                audio_bytes = st.session_state.tts_system.generate_audio(response)
+                                if audio_bytes:
+                                    st.audio(audio_bytes, format="audio/mp3")
+                                    st.success("🔊 तैयार!")
+                            except Exception as tts_error:
+                                logger.warning(f"TTS failed: {tts_error}")
+                                st.info("💡 टेक्स्ट पढ़ें")
+                else:
+                    st.warning("⚠️ जवाब प्राप्त नहीं हुआ")
+            else:
+                st.warning("⚠️ आवाज़ स्पष्ट नहीं थी")
+                
         except Exception as e:
             st.error(f"❌ त्रुटि: {str(e)}")
-            logger.error(f"Voice processing error: {e}", exc_info=True)
+            logger.error(f"Voice error: {e}", exc_info=True)
+        finally:
             st.session_state.processing = False
-            
-            # Optional: Show retry button
-if st.button("🔄 फिर से कोशिश करें"):
-                st.session_state.last_audio_data = None
-                st.rerun()
-
 else:
    st.markdown("""
 <style>
@@ -1109,6 +1079,7 @@ st.markdown("""
     </small></p>
 </div>
 """, unsafe_allow_html=True)
+
 
 
 
