@@ -570,7 +570,7 @@ with col2:
     type=["wav", "mp3", "amr"]
 )
 if audio_file is not None:
-   
+    audio_bytes = audio_file.read()
     st.audio(audio_bytes, format="audio/wav")
     
     st.success("✅ ऑडियो अपलोड हो गया!")
@@ -856,6 +856,7 @@ st.markdown("""
     </small></p>
 </div>
 """, unsafe_allow_html=True)
+
 
 
 
