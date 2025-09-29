@@ -561,22 +561,40 @@ with st.sidebar:
 # ------------------- Enhanced Groq LLM setup -------------------
 
 # ------------------- Voice Input Section -------------------
-st.markdown('<div class="status-box"><h3>🎤 आवाज़ से सवाल पूछें</h3></div>', unsafe_allow_html=True)
+t.markdown('<div class="status-box"><h3>🎤 आवाज़ से सवाल पूछें</h3></div>', unsafe_allow_html=True)
 
 col1, col2, col3 = st.columns([1, 2, 1])
 with col2:
     audio_file = st.file_uploader("अपनी आवाज़ फ़ाइल अपलोड करें", type=["wav", "mp3", "amr"])
 
+def convert_to_wav(file_bytes, file_type):
+    """Convert uploaded audio to WAV format for STT."""
+    audio = None
+    if file_type == "audio/wav":
+        return file_bytes  # already WAV
+    elif file_type in ["audio/mp3", "audio/mpeg"]:
+        audio = AudioSegment.from_file(io.BytesIO(file_bytes), format="mp3")
+    elif file_type == "audio/amr":
+        audio = AudioSegment.from_file(io.BytesIO(file_bytes), format="amr")
+    else:
+        raise ValueError("Unsupported audio format")
+    
+    # Export to WAV in memory
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp_wav:
+        audio.export(tmp_wav.name, format="wav")
+        tmp_wav.flush()
+        with open(tmp_wav.name, "rb") as f:
+            wav_data = f.read()
+        os.unlink(tmp_wav.name)
+        return wav_data
+
 if audio_file:
-    wav_audio_data = audio_file.read()
+    wav_audio_data = convert_to_wav(audio_file.read(), audio_file.type)
     
     if wav_audio_data != st.session_state.get("last_audio_data"):
         st.session_state["last_audio_data"] = wav_audio_data
-        st.audio(
-            wav_audio_data,
-            format="audio/wav" if audio_file.type == "audio/wav" else "audio/mp3"
-        )
-    
+        st.audio(wav_audio_data, format="audio/wav")
+
     if not st.session_state.get("processing", False):
         st.session_state.processing = True
         try:
@@ -624,7 +642,6 @@ if audio_file:
             logger.error(f"Processing error: {e}", exc_info=True)
         finally:
             st.session_state.processing = False
-
 else:
    st.markdown("""
 <style>
@@ -856,6 +873,7 @@ st.markdown("""
     </small></p>
 </div>
 """, unsafe_allow_html=True)
+
 
 
 
