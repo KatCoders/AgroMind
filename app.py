@@ -253,7 +253,7 @@ st.markdown("""
 # ------------------- Web Geolocation -------------------
 
 def get_location_html():
-    """Generate HTML for browser geolocation"""
+    """Generate HTML for client-side browser geolocation only"""
     return """
     <div id="location-container">
         <button id="get-location-btn" onclick="getLocation()" 
@@ -269,24 +269,24 @@ def get_location_html():
     function getLocation() {
         const statusDiv = document.getElementById('location-status');
         const btn = document.getElementById('get-location-btn');
-        
+
         if (navigator.geolocation) {
             btn.innerHTML = '⏳ स्थान प्राप्त कर रहे हैं...';
             btn.disabled = true;
-            
+
             navigator.geolocation.getCurrentPosition(
                 function(position) {
                     const lat = position.coords.latitude;
                     const lng = position.coords.longitude;
                     const accuracy = position.coords.accuracy;
-                    
+
                     statusDiv.innerHTML = `
                         ✅ स्थान मिल गया!<br>
                         📍 अक्षांश: ${lat.toFixed(4)}<br>
                         📍 देशांतर: ${lng.toFixed(4)}<br>
                         🎯 सटीकता: ${Math.round(accuracy)}m
                     `;
-                    
+
                     btn.innerHTML = '📍 पुनः स्थान प्राप्त करें';
                     btn.disabled = false;
                 },
@@ -317,6 +317,7 @@ def get_location_html():
     }
     </script>
     """
+
 
 
 
@@ -1072,3 +1073,4 @@ st.markdown("""
     </small></p>
 </div>
 """, unsafe_allow_html=True)
+
