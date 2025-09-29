@@ -576,7 +576,9 @@ if audio_file and audio_file != st.session_state.last_audio and not st.session_s
         # Step 1: Transcribe (STT)
         with st.spinner("🔄 आवाज़ समझ रहे हैं..."):
            audio_bytes = audio_file.read()
-           voice_text = st.session_state.stt.transcribe(audio_bytes, filename="live_audio.wav", language="hi")
+           unified_audio = {"wav": audio_bytes}
+            
+           voice_text = st.session_state.stt.transcribe(unified_audio["wav"], filename="live_audio.wav", language="hi")
             
             
         
@@ -847,5 +849,6 @@ st.markdown("""
     </small></p>
 </div>
 """, unsafe_allow_html=True)
+
 
 
