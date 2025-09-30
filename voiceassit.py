@@ -476,10 +476,10 @@ def voice_assistant_feature():
         st.markdown("---")
         audio_bytes = st_audiorec()
         
-        
+      
         if audio_bytes:
             with st.spinner("⏳ आपकी आवाज़ प्रोसेस हो रही है... कृपया इंतज़ार करें"):
-                st.session_state.processing = True
+                st.session_state.processing = True 
             # Audio validation
             audio_size_kb = len(audio_bytes) / 1024
             
@@ -498,13 +498,13 @@ def voice_assistant_feature():
                 st.session_state.audio_path = tfile.name
             
             
-             
+            st.session_state.processing = False  
             # Action buttons
             st.markdown("---")
             col_btn1, col_btn2, col_btn3 = st.columns(3)
            
             with col_btn1:
-                st.session_state.processing = False  
+              
                 process_btn = st.button(
                     "🚀 AI से पूछें",
                     type="primary",
