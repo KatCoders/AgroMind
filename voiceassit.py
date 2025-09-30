@@ -494,17 +494,18 @@ def voice_assistant_feature():
             with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tfile:
                 tfile.write(audio_bytes)
                 st.session_state.audio_path = tfile.name
-                process_audio_query(selected_lang)
+
             st.markdown("---")
-        col_btn1, col_btn2, col_btn3 = st.columns(3)
-       
-        with col_btn1:
+            col_btn1, col_btn2, col_btn3 = st.columns(3)
+            process_audio_query(selected_lang)
+            with col_btn1:
                 process_btn = st.button(
-                    "▶️ प्रोसेस करें",
-                    
+                    "🚀 AI से पूछें",
+                    use_container_width=True,
+                    disabled=st.session_state.get("processing", False)
                 )
 
-        with col_btn2:
+            with col_btn2:
                 if st.button("🔄 फिर से रिकॉर्ड", use_container_width=True, disabled=st.session_state.get("processing", False)):
                     with st.spinner("साफ़ कर रहे हैं..."):
                         cleanup_temp_files(st.session_state.audio_path)
@@ -513,7 +514,7 @@ def voice_assistant_feature():
                         st.session_state.ai_response = ""
                         st.rerun()
 
-        with col_btn3:
+            with col_btn3:
                 if st.button("🗑️ Cancel", use_container_width=True, disabled=st.session_state.get("processing", False)):
                     cleanup_temp_files(st.session_state.audio_path)
                     st.session_state.audio_path = None
@@ -524,13 +525,15 @@ def voice_assistant_feature():
        
         # Handle the processing when user clicked the button
         if process_btn:
-            
+            st.session_state.processing = True
             try:
                 with st.spinner("🤖 AI आपके सवाल को समझ रहा है... कृपया प्रतीक्षा करें..."):
-                    st.success("Done")
+                     #process_audio_query(selected_lang)
+                     pass
             except Exception as e:
                 st.error(f"प्रोसेसिंग में त्रुटि: {e}")
-            
+            finally:
+                st.session_state.processing = False
 
     with tab2:
         show_conversation_history()
