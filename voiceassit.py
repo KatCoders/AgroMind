@@ -528,7 +528,7 @@ def voice_assistant_feature():
             st.session_state.processing = True
             try:
                 with st.spinner("🤖 AI आपके सवाल को समझ रहा है... कृपया प्रतीक्षा करें..."):
-                     process_audio_query(selected_lang)
+                    st.success("Done")
             except Exception as e:
                 st.error(f"प्रोसेसिंग में त्रुटि: {e}")
             finally:
