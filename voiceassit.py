@@ -498,7 +498,7 @@ def voice_assistant_feature():
                 st.session_state.audio_path = tfile.name
             
             
-            st.session_state.processing = False  
+       
             # Action buttons
             st.markdown("---")
             col_btn1, col_btn2, col_btn3 = st.columns(3)
@@ -530,6 +530,8 @@ def voice_assistant_feature():
             
             if process_btn:
                 process_audio_query(selected_lang)
+            st.session_state.processing = False  
+            st.success("✅ Audio प्रोसेस पूरी हो गई।")
         
         else:
             st.info("👆 ऊपर 🔴 Record बटन दबाएं और अपना सवाल बोलें")
