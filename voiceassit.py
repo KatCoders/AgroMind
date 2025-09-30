@@ -502,7 +502,7 @@ def voice_assistant_feature():
                 process_btn = st.button(
                     "▶️ प्रोसेस करें",
                     use_container_width=True,
-                    disabled=st.session_state.get("processing", False)
+                    
                 )
 
         with col_btn2:
