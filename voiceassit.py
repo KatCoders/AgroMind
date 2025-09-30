@@ -483,16 +483,7 @@ def voice_assistant_feature():
             # Audio validation
             audio_size_kb = len(audio_bytes) / 1024
             
-            col_info1, col_info2, col_info3 = st.columns(3)
-            with col_info1:
-                st.metric("📊 Size", f"{audio_size_kb:.1f} KB",size = "small")
-            with col_info2:
-                duration = len(audio_bytes) / (16000 * 2)  # Approximate
-                st.metric("⏱️ Duration", f"~{duration:.1f}s",size="small")
-            with col_info3:
-                quality = "🟢 Good" if MIN_AUDIO_SIZE_KB < audio_size_kb < MAX_AUDIO_SIZE_KB else "🟡 Check"
-                st.metric("✅ Quality", quality,size="small")
-            
+           
             if audio_size_kb < MIN_AUDIO_SIZE_KB:
                 st.warning("⚠️ Audio बहुत छोटी है। कम से कम 2-3 सेकंड तक बोलें।")
             elif audio_size_kb > MAX_AUDIO_SIZE_KB:
