@@ -474,11 +474,12 @@ def voice_assistant_feature():
         
         # Recording area
         st.markdown("---")
+        st.caption("wait will process... . It may take up to 10-15 seconds.")
         audio_bytes = st_audiorec()
         
       
     if audio_bytes:
-            st.contract(" processing audio...", expanded=True)
+            
             # Audio validation
             audio_size_kb = len(audio_bytes) / 1024
             
