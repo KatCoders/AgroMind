@@ -525,14 +525,13 @@ def voice_assistant_feature():
        
         # Handle the processing when user clicked the button
         if process_btn:
-            st.session_state.processing = True
+            
             try:
                 with st.spinner("🤖 AI आपके सवाल को समझ रहा है... कृपया प्रतीक्षा करें..."):
                     st.success("Done")
             except Exception as e:
                 st.error(f"प्रोसेसिंग में त्रुटि: {e}")
-            finally:
-                st.session_state.processing = False
+            
 
     with tab2:
         show_conversation_history()
@@ -703,8 +702,7 @@ def process_audio_query(selected_lang: str):
         st.success(f"✅ पूरा हुआ! ({response_time:.1f} seconds)")
         
         # Auto-rerun to reset recording interface
-        time.sleep(60)
-        st.rerun()
+        
 
 
 def show_conversation_history():
