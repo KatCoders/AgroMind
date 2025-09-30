@@ -485,13 +485,13 @@ def voice_assistant_feature():
             
             col_info1, col_info2, col_info3 = st.columns(3)
             with col_info1:
-                st.metric("📊 Size", f"{audio_size_kb:.1f} KB")
+                st.caption( st.metric("📊 Size", f"{audio_size_kb:.1f} KB"))
             with col_info2:
                 duration = len(audio_bytes) / (16000 * 2)  # Approximate
-                st.metric("⏱️ Duration", f"~{duration:.1f}s")
+                st.caption(st.metric("⏱️ Duration", f"~{duration:.1f}s"))
             with col_info3:
                 quality = "🟢 Good" if MIN_AUDIO_SIZE_KB < audio_size_kb < MAX_AUDIO_SIZE_KB else "🟡 Check"
-                st.metric("✅ Quality", quality)
+                st.caption(st.metric("✅ Quality", quality))
             
             if audio_size_kb < MIN_AUDIO_SIZE_KB:
                 st.warning("⚠️ Audio बहुत छोटी है। कम से कम 2-3 सेकंड तक बोलें।")
@@ -507,12 +507,13 @@ def voice_assistant_feature():
                 st.session_state.audio_path = tfile.name
             
             
-            st.session_state.processing = False  
+             
             # Action buttons
             st.markdown("---")
             col_btn1, col_btn2, col_btn3 = st.columns(3)
            
             with col_btn1:
+                st.session_state.processing = False  
                 process_btn = st.button(
                     "🚀 AI से पूछें",
                     type="primary",
@@ -564,8 +565,8 @@ def voice_assistant_feature():
     st.markdown("---")
     st.markdown("""
     <div class='footer'>
-        <p>✨ Powered by <strong>Whisper-v3</strong> + <strong>Groq LLM</strong> + <strong>gTTS</strong></p>
-        <p style='font-size: 0.8rem; color: #999;'>Made with ❤️ for seamless voice interaction</p>
+        2024 © AgroMind. All rights reserved.<br>       
+        <p style='font-size: 0.8rem; color: #999;'>Made with ❤️ AgroMind for seamless voice interaction</p>
     </div>
     """, unsafe_allow_html=True)
 
