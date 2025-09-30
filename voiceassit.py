@@ -5,7 +5,12 @@ from st_audiorec import st_audiorec
 import requests
 from gtts import gTTS
 import io
+from datetime import datetime
+import logging
 
+# Setup logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Import with error handling
 try:
@@ -13,6 +18,7 @@ try:
 except ImportError:
     st.error("❌ voice_pipeline module not found!")
     get_llm_response = None
+    chain = None
 
 # --- 🔑 Keys लोड करें (Streamlit Cloud Compatible) ---
 try:
@@ -139,7 +145,10 @@ def initialize_session_state():
         "ai_response": "",
         "processing": False,
         "conversation_history": [],
-        "audio_quality_tips_shown": False
+        "chat_history": [],
+        "audio_quality_tips_shown": False,
+        "voice_enabled": True,
+        "tts_system": None
     }
     
     for key, value in defaults.items():
@@ -187,14 +196,15 @@ def voice_assistant_feature():
         """)
         return
     
-    if get_llm_response is None:
+    # Check if voice_pipeline is available
+    if 'chain' not in globals() or chain is None:
         st.error("❌ voice_pipeline module उपलब्ध नहीं है!")
         return
     
     # Header with tips
     col_head1, col_head2 = st.columns([3, 1])
     with col_head1:
-       st.markdown("#### 🎙️ रिकॉर्ड करें")
+        st.markdown("#### 🎙️ रिकॉर्ड करें")
     with col_head2:
         if st.button("💡 Tips"):
             st.session_state.audio_quality_tips_shown = False
@@ -210,21 +220,17 @@ def voice_assistant_feature():
             "भाषा चुनें",
             options=list(languages.keys()),
             format_func=lambda x: languages[x],
-            key="language_selector"
+            key="language_selector",
+            label_visibility="collapsed"
         )
-   
     
     with col1:
-    # Recording tips inline
-    
-     st.caption("🔴 Record बटन दबाएं → बोलें → Stop दबाएं")
+        # Recording tips inline
+        st.caption("🔴 Record बटन दबाएं → बोलें → Stop दबाएं")
     
     audio_bytes = st_audiorec()
     
     if audio_bytes:
-        # Display recorded audio
-        #st.audio(audio_bytes, format="audio/wav")
-        
         # Check audio size
         audio_size_kb = len(audio_bytes) / 1024
         if audio_size_kb < 5:
@@ -315,46 +321,71 @@ def voice_assistant_feature():
                 status_text.text("💬 AI जवाब तैयार कर रहा है... (2/3)")
                 progress_bar.progress(66)
                 
-              
-                     
-            full_response = ""
-            try:
-                 response_placeholder = st.empty()
-                 response_placeholder.markdown("🤖 सोच रहा हूं... 🧠")
-            
-                 for chunk in chain.stream({
-                    "question": transcript,
+                full_response = ""
+                try:
+                    response_placeholder = st.empty()
+                    response_placeholder.markdown("🤖 सोच रहा हूं... 🧠")
                     
-                }):
-                    full_response += chunk
-                    response_placeholder.markdown(f"🤖 {full_response}")
+                    # Stream response from chain
+                    for chunk in chain.stream({"question": transcript}):
+                        full_response += chunk
+                        response_placeholder.markdown(f"**🤖 AI का जवाब:**\n\n{full_response}")
                     
-            except Exception as e:
-                error_msg = f"जवाब तैयार करने में समस्या: {str(e)}"
-                response_placeholder.error(f"❌ {error_msg}")
-                full_response = "क्षमा करें, तकनीकी समस्या के कारण जवाब नहीं दे सका। कृपया फिर से कोशिश करें।"
-                logger.error(f"LLM generation error: {e}")
-        
-            st.session_state.chat_history.append({
-            "role": "user", 
-            "content": transcript, 
-            "type": "text",
-            "timestamp": datetime.now().isoformat()
-           })
-    
-        # Generate audio - NO THREADING, direct call
-            if st.session_state.voice_enabled and full_response:
-                with st.spinner("🎧 आवाज़ में तैयार कर रहे हैं..."):
-                  audio_bytes = st.session_state.tts_system.generate_audio(full_response)
-
-                if audio_bytes:
-                    st.audio(audio_bytes, format="audio/mp3")
-                    st.success("🔊 तैयार!")
-                else:
-                    st.info("💡 टेक्स्ट जवाब तैयार है, लेकिन आवाज़ नहीं बनाई जा सकी।")
-
-        
-
+                    st.session_state.ai_response = full_response
+                        
+                except Exception as e:
+                    error_msg = f"जवाब तैयार करने में समस्या: {str(e)}"
+                    response_placeholder.error(f"❌ {error_msg}")
+                    full_response = "क्षमा करें, तकनीकी समस्या के कारण जवाब नहीं दे सका। कृपया फिर से कोशिश करें।"
+                    logger.error(f"LLM generation error: {e}")
+                
+                # Save to chat history
+                st.session_state.chat_history.append({
+                    "role": "user", 
+                    "content": transcript, 
+                    "type": "text",
+                    "timestamp": datetime.now().isoformat()
+                })
+                
+                st.session_state.chat_history.append({
+                    "role": "assistant", 
+                    "content": full_response, 
+                    "type": "text",
+                    "timestamp": datetime.now().isoformat()
+                })
+                
+                # Save to conversation history
+                st.session_state.conversation_history.append({
+                    "user": transcript,
+                    "ai": full_response,
+                    "lang": selected_lang
+                })
+                
+                # Step 3: Generate audio response
+                if full_response and full_response != "क्षमा करें, तकनीकी समस्या के कारण जवाब नहीं दे सका। कृपया फिर से कोशिश करें।":
+                    status_text.text("🎙 जवाब को आवाज़ में बदल रहे हैं... (3/3)")
+                    progress_bar.progress(90)
+                    
+                    try:
+                        # Check if TTS system is available from voice_pipeline
+                        if st.session_state.voice_enabled and hasattr(st.session_state, 'tts_system') and st.session_state.tts_system:
+                            audio_bytes_tts = st.session_state.tts_system.generate_audio(full_response)
+                        else:
+                            # Fallback to gTTS
+                            audio_bytes_tts = text_to_speech(full_response, selected_lang)
+                        
+                        if audio_bytes_tts:
+                            progress_bar.progress(100)
+                            status_text.text("✅ पूरा हुआ!")
+                            st.audio(audio_bytes_tts, format="audio/mp3")
+                        else:
+                            st.info("💡 टेक्स्ट जवाब तैयार है, लेकिन आवाज़ नहीं बनाई जा सकी।")
+                            
+                    except Exception as e:
+                        st.error(f"❌ TTS Error: {str(e)}")
+                        st.info("💡 आप टेक्स्ट जवाब ऊपर पढ़ सकते हैं।")
+                
+                # Clear progress indicators
                 progress_bar.empty()
                 status_text.empty()
             
@@ -394,6 +425,7 @@ def voice_assistant_feature():
     with col_f3:
         if st.button("🗑 Clear All"):
             st.session_state.conversation_history = []
+            st.session_state.chat_history = []
             cleanup_temp_files(st.session_state.audio_path)
             st.session_state.audio_path = None
             st.success("✅ Cleared!")
