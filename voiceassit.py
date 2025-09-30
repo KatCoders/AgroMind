@@ -8,6 +8,7 @@ import io
 from datetime import datetime
 import logging
 import time
+# Ensure this module is available
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -404,17 +405,11 @@ def display_chat_message(role: str, content: str, timestamp: str = None):
 
 
 def voice_assistant_feature():
-    """
-    Ultra-Optimized Voice Assistant for Streamlit Cloud
-    - Instant UI feedback
-    - Streaming responses
-    - Non-blocking operations
-    - Better UX for slow networks
-    """
- 
+    """Enhanced Streamlit Cloud Voice Assistant with better UI"""
+    # Load custom CSS (if कोई है)
     initialize_session_state()
 
-    # ===== API VALIDATION =====
+    # Header / API checks
     if not GROQ_API_KEY:
         st.error("❌ **GROQ_API_KEY नहीं मिली!**")
         with st.expander("🔧 Setup Instructions", expanded=True):
@@ -427,468 +422,130 @@ def voice_assistant_feature():
             GROQ_API_KEY = "your_key_here"
             ```
             4. Save और redeploy करें 🚀
-            
-            **या Local में:**
-            ```bash
-            export GROQ_API_KEY="your_key_here"
-            ```
             """)
         return
 
-  
+    if 'chain' not in globals() or chain is None:
+        st.error("❌ voice_pipeline module उपलब्ध नहीं है!")
+        st.info("💡 सुनिश्चित करें कि voice_pipeline.py फ़ाइल मौजूद है")
+        return
 
-    # ===== HEADER WITH STATS =====
-    st.markdown("### 🎙️ Voice Assistant")
-    st.caption("बोलो, सुनो, समझो - AI से बात करें")
+    # Stats
     st.markdown("<br>", unsafe_allow_html=True)
-    
     show_stats_dashboard()
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # ===== TABS =====
     tab1, tab2, tab3 = st.tabs(["🎙️ रिकॉर्ड करें", "💬 बातचीत", "⚙️ सेटिंग्स"])
 
-    # ===== TAB 1: RECORDING =====
     with tab1:
-        # Tips toggle
-        col_header, col_tips_btn = st.columns([3, 1])
-        with col_header:
-            st.markdown("#### 🎤 अपना सवाल रिकॉर्ड करें")
-        with col_tips_btn:
-            if st.button("💡 Tips", use_container_width=True, key="tips_toggle"):
+        col_tip, col_tip_btn = st.columns([3, 1])
+        with col_tip_btn:
+            if st.button("💡 Tips दिखाएं", use_container_width=True):
                 st.session_state.audio_quality_tips_shown = not st.session_state.get("audio_quality_tips_shown", False)
 
         show_audio_quality_tips()
 
-        # Language selector
-        st.markdown("---")
         languages = get_supported_languages()
-        
-        col_lang, col_status = st.columns([2, 1])
-        
-        with col_lang:
+        left, right = st.columns([2, 1])
+        with left:
+            st.markdown("### 🎙️ रिकॉर्ड करें")
+            st.caption("नीचे Record बटन दबाएं और स्पष्ट आवाज में बोलें")
+        with right:
             lang_keys = list(languages.keys())
-            default_lang = st.session_state.get("last_language", "hi")
+            default_lang = st.session_state.get("last_language", lang_keys[0] if lang_keys else None)
             try:
                 default_index = lang_keys.index(default_lang) if default_lang in lang_keys else 0
             except Exception:
                 default_index = 0
-            
-            selected_lang = st.selectbox(
-                "🌐 भाषा चुनें",
-                options=lang_keys,
-                format_func=lambda x: languages[x],
-                key="language_selector",
-                index=default_index
-            )
-            st.session_state.last_language = selected_lang
-        
-        with col_status:
-            # Processing status indicator
-            if st.session_state.get("processing", False):
-                st.markdown("""
-                <div style='background: #fff3cd; padding: 1rem; border-radius: 8px; text-align: center;'>
-                    <div class='loading-dots'>
-                        <span>⚙️</span>
-                        <span>⚙️</span>
-                        <span>⚙️</span>
-                    </div>
-                    <div style='font-size: 0.8rem; color: #856404; margin-top: 0.5rem;'>
-                        प्रोसेसिंग...
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
+            if lang_keys:
+                selected_lang = st.selectbox(
+                    "🌐 भाषा चुनें",
+                    options=lang_keys,
+                    format_func=lambda x: languages[x],
+                    key="language_selector",
+                    index=default_index
+                )
             else:
-                st.markdown("""
-                <div style='background: #d4edda; padding: 1rem; border-radius: 8px; text-align: center;'>
-                    <div style='font-size: 1.5rem;'>✅</div>
-                    <div style='font-size: 0.8rem; color: #155724;'>तैयार है</div>
-                </div>
-                """, unsafe_allow_html=True)
+                selected_lang = None
+            st.session_state.last_language = selected_lang
 
-        # Audio recorder
         st.markdown("---")
-        st.markdown("##### 🔴 अभी रिकॉर्ड करें")
-        st.caption("नीचे Record बटन दबाएं → बोलें → Stop दबाएं")
-        
-        audio_bytes = st_audiorec()
+        st.caption("Processing: यह कुछ सेकंड ले सकता है।")
+        audio_bytes = st_audiorec()  # यह आपके st_audiorec से bytes देवे के उम्मीद बा
 
-        # ===== AUDIO PROCESSING LOGIC =====
+        # Default values to avoid NameError
+        process_btn = False
+
         if audio_bytes:
-            # Validate audio size
-            audio_size_kb = len(audio_bytes) / 1024
-            
-            # Show audio info
-            col_info1, col_info2, col_info3 = st.columns(3)
-            with col_info1:
-                st.metric("📊 Size", f"{audio_size_kb:.1f} KB")
-            with col_info2:
-                duration = audio_size_kb / 16  # Approximate duration (16KB/sec for WAV)
-                st.metric("⏱️ Duration", f"~{duration:.1f}s")
-            with col_info3:
-                quality = "🟢 Good" if MIN_AUDIO_SIZE_KB < audio_size_kb < MAX_AUDIO_SIZE_KB else "🟡 Check"
-                st.metric("✨ Quality", quality)
-            
-            # Validation warnings
-            if audio_size_kb < MIN_AUDIO_SIZE_KB:
+            # Basic validation
+            try:
+                audio_size_kb = len(audio_bytes) / 1024
+            except Exception:
+                audio_size_kb = 0
+
+            if audio_size_kb and audio_size_kb < MIN_AUDIO_SIZE_KB:
                 st.warning("⚠️ Audio बहुत छोटी है। कम से कम 2-3 सेकंड तक बोलें।")
-            elif audio_size_kb > MAX_AUDIO_SIZE_KB:
+            if audio_size_kb and audio_size_kb > MAX_AUDIO_SIZE_KB:
                 st.warning("⚠️ Audio बहुत बड़ी है। छोटे वाक्यों में बोलें।")
-            
-            # Save to temp file (clean previous if exists)
+
+            # Save to temp file
             if st.session_state.get("audio_path"):
                 cleanup_temp_files(st.session_state.audio_path)
-            
-            try:
-                with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tfile:
-                    tfile.write(audio_bytes)
-                    st.session_state.audio_path = tfile.name
-                    st.success(f"✅ Audio saved successfully!")
-            except Exception as e:
-                st.error(f"❌ Audio save failed: {e}")
-                st.session_state.audio_path = None
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tfile:
+                tfile.write(audio_bytes)
+                st.session_state.audio_path = tfile.name
 
-            # Action buttons
             st.markdown("---")
-            st.markdown("##### 🚀 अब क्या करें?")
-            
             col_btn1, col_btn2, col_btn3 = st.columns(3)
 
-            with col_btn1:
+        with col_btn1:
                 process_btn = st.button(
-                    "🤖 AI से पूछें",
+                    "🚀 AI से पूछें",
                     use_container_width=True,
-                    disabled=st.session_state.get("processing", False),
-                    type="primary",
-                    key="process_audio_btn"
+                    disabled=st.session_state.get("processing", False)
                 )
 
-            with col_btn2:
-                if st.button(
-                    "🔄 फिर से रिकॉर्ड",
-                    use_container_width=True,
-                    disabled=st.session_state.get("processing", False),
-                    key="re_record_btn"
-                ):
-                    cleanup_temp_files(st.session_state.audio_path)
-                    st.session_state.audio_path = None
-                    st.session_state.transcript = ""
-                    st.session_state.ai_response = ""
-                    st.rerun()
-
-            with col_btn3:
-                if st.button(
-                    "🗑️ Cancel",
-                    use_container_width=True,
-                    disabled=st.session_state.get("processing", False),
-                    key="cancel_btn"
-                ):
-                    cleanup_temp_files(st.session_state.audio_path)
-                    st.session_state.audio_path = None
-                    st.session_state.transcript = ""
-                    st.session_state.ai_response = ""
-                    st.rerun()
-
-            # ===== PROCESSING HANDLER =====
-            if process_btn and st.session_state.audio_path:
-                st.session_state.processing = True
-                
-                # Create dedicated processing container
-                process_container = st.container()
-                
-                with process_container:
-                    st.markdown("---")
-                    st.markdown("### 🔄 Processing Your Request")
-                    
-                    # Progress tracking
-                    progress_bar = st.progress(0, text="शुरू हो रहा है...")
-                    status_placeholder = st.empty()
-                    result_placeholder = st.empty()
-                    
-                    start_time = time.time()
-                    
-                    try:
-                        # ===== STEP 1: TRANSCRIPTION =====
-                        status_placeholder.info("🧠 **Step 1/3:** आपकी आवाज़ को समझ रहे हैं...")
-                        progress_bar.progress(10, text="Transcribing audio...")
-                        
-                        transcript = ""
-                        confidence = 0.0
-                        
-                        try:
-                            transcript, confidence = transcribe_audio_with_retry(
-                                st.session_state.audio_path,
-                                selected_lang
-                            )
-                            st.session_state.transcript = transcript
-                            
-                            progress_bar.progress(35, text="Transcription complete!")
-                            
-                            if not transcript:
-                                status_placeholder.error("❌ कोई शब्द नहीं मिला। कृपया फिर से स्पष्ट बोलें।")
-                                st.session_state.processing = False
-                                progress_bar.empty()
-                                time.sleep(2)
-                                st.rerun()
-                                return
-                            
-                            # Show transcript with confidence
-                            confidence_emoji = "🟢" if confidence > 0.8 else "🟡" if confidence > 0.6 else "🔴"
-                            result_placeholder.success(f"""
-                            ✅ **आपने कहा:**  
-                            "{transcript}"
-                            
-                            {confidence_emoji} Confidence: {confidence*100:.1f}%
-                            """)
-                            
-                            # Update stats
-                            word_count = len(transcript.split())
-                            st.session_state.total_words_spoken += word_count
-                            
-                        except requests.exceptions.Timeout:
-                            status_placeholder.error("❌ समय समाप्त: नेटवर्क धीमा है। फिर से कोशिश करें।")
-                            st.session_state.error_count += 1
-                            st.session_state.processing = False
-                            progress_bar.empty()
-                            time.sleep(2)
-                            st.rerun()
-                            return
-                        
-                        except Exception as e:
-                            status_placeholder.error(f"❌ Transcription Error: {str(e)}")
-                            st.info("💡 Check: Internet connection, GROQ API key, Audio quality")
-                            st.session_state.error_count += 1
-                            st.session_state.last_error = str(e)
-                            st.session_state.processing = False
-                            progress_bar.empty()
-                            time.sleep(2)
-                            st.rerun()
-                            return
-                        
-                        # ===== STEP 2: AI RESPONSE GENERATION =====
-                        if transcript:
-                            status_placeholder.info("💬 **Step 2/3:** AI जवाब तैयार कर रहा है...")
-                            progress_bar.progress(50, text="Generating AI response...")
-                            
-                            full_response = ""
-                            response_placeholder = st.empty()
-                            
-                            try:
-                                # Build context from recent conversations
-                                context = []
-                                for conv in st.session_state.conversation_history[-3:]:
-                                    context.append(f"User: {conv['user']}\nAI: {conv['ai']}")
-                                context_str = "\n\n".join(context) if context else ""
-                                
-                                # Create query
-                                query_input = {
-                                    "question": transcript,
-                                    "context": context_str if context_str else None
-                                }
-                                
-                                # Stream response with visual feedback
-                                chunk_count = 0
-                                for chunk in chain.stream(query_input):
-                                    full_response += chunk
-                                    chunk_count += 1
-                                    
-                                    # Update progress (50-75%)
-                                    progress_pct = min(75, 50 + (chunk_count // 5))
-                                    progress_bar.progress(progress_pct, text=f"Streaming response... ({len(full_response)} chars)")
-                                    
-                                    # Update UI every 3 chunks for smooth streaming
-                                    if chunk_count % 3 == 0:
-                                        response_placeholder.markdown(f"""
-                                        **🤖 AI का जवाब:**
-                                        
-                                        {full_response}▌
-                                        """)
-                                
-                                # Final response
-                                response_placeholder.markdown(f"""
-                                **🤖 AI का जवाब:**
-                                
-                                {full_response}
-                                """)
-                                
-                                st.session_state.ai_response = full_response
-                                progress_bar.progress(75, text="Response generated!")
-                                
-                            except Exception as e:
-                                error_msg = str(e)
-                                status_placeholder.error(f"❌ AI Response Error: {error_msg}")
-                                full_response = "क्षमा करें, तकनीकी समस्या के कारण जवाब नहीं दे सका।"
-                                response_placeholder.warning(full_response)
-                                logger.error(f"LLM generation error: {e}", exc_info=True)
-                                st.session_state.error_count += 1
-                            
-                            # Save to conversation history
-                            timestamp = datetime.now().strftime("%I:%M %p")
-                            
-                            st.session_state.chat_history.append({
-                                "role": "user",
-                                "content": transcript,
-                                "timestamp": timestamp
-                            })
-                            
-                            st.session_state.chat_history.append({
-                                "role": "assistant",
-                                "content": full_response,
-                                "timestamp": timestamp
-                            })
-                            
-                            st.session_state.conversation_history.append({
-                                "user": transcript,
-                                "ai": full_response,
-                                "lang": selected_lang,
-                                "timestamp": datetime.now().isoformat()
-                            })
-                            
-                            # ===== STEP 3: TEXT-TO-SPEECH =====
-                            if full_response and st.session_state.voice_enabled and "क्षमा करें" not in full_response:
-                                status_placeholder.info("🎙 **Step 3/3:** जवाब को आवाज़ में बदल रहे हैं...")
-                                progress_bar.progress(85, text="Generating audio...")
-                                
-                                try:
-                                    audio_bytes_tts = text_to_speech(full_response, selected_lang)
-                                    
-                                    if audio_bytes_tts:
-                                        progress_bar.progress(100, text="✅ पूरा हुआ!")
-                                        status_placeholder.success("🎉 सब कुछ तैयार है!")
-                                        
-                                        # Audio player with better UI
-                                        st.markdown("---")
-                                        st.markdown("#### 🔊 जवाब सुनें")
-                                        st.audio(audio_bytes_tts, format="audio/mp3")
-                                        
-                                except Exception as e:
-                                    status_placeholder.warning(f"⚠️ आवाज़ नहीं बनाई जा सकी: {str(e)}")
-                                    logger.warning(f"TTS error: {e}")
-                                    progress_bar.progress(100, text="✅ Text response ready!")
-                            else:
-                                progress_bar.progress(100, text="✅ पूरा हुआ!")
-                                status_placeholder.success("🎉 सब कुछ तैयार है!")
-                            
-                            # Update statistics
-                            end_time = time.time()
-                            response_time = end_time - start_time
-                            
-                            st.session_state.total_conversations += 1
-                            
-                            # Calculate running average
-                            n = st.session_state.total_conversations
-                            old_avg = st.session_state.avg_response_time
-                            st.session_state.avg_response_time = (old_avg * (n-1) + response_time) / n
-                            
-                            # Success metrics
-                            st.markdown("---")
-                            col_m1, col_m2, col_m3 = st.columns(3)
-                            with col_m1:
-                                st.metric("⏱️ Response Time", f"{response_time:.1f}s")
-                            with col_m2:
-                                st.metric("📝 Words", word_count)
-                            with col_m3:
-                                st.metric("🎯 Confidence", f"{confidence*100:.0f}%")
-                    
-                    except Exception as e:
-                        status_placeholder.error(f"❌ Unexpected Error: {str(e)}")
-                        logger.error(f"Critical error in process_audio_query: {e}", exc_info=True)
-                        st.session_state.error_count += 1
-                        st.session_state.last_error = str(e)
-                    
-                    finally:
-                        # Cleanup
+        with col_btn2:
+                if st.button("🔄 फिर से रिकॉर्ड", use_container_width=True, disabled=st.session_state.get("processing", False)):
+                    with st.spinner("साफ़ कर रहे हैं..."):
                         cleanup_temp_files(st.session_state.audio_path)
                         st.session_state.audio_path = None
-                        st.session_state.processing = False
-                        
-                        # Clear progress UI after short delay
-                        time.sleep(2)
-                        progress_bar.empty()
-                        
-                        # Show completion message
-                        st.success("✅ Ready for next question!")
-                        st.info("💡 Scroll up to record again or check conversation history")
-                        
-                        # Auto-refresh after 3 seconds (OPTIMIZED: was 60!)
-                        with st.spinner("Refreshing in 3 seconds..."):
-                            time.sleep(3)
+                        st.session_state.transcript = ""
+                        st.session_state.ai_response = ""
                         st.rerun()
 
-        else:
-            # No audio recorded yet - Show instructions
-            st.markdown("---")
-            st.markdown("""
-            <div style='text-align: center; padding: 2.5rem; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 15px; margin-top: 1rem; color: white;'>
-                <div style='font-size: 3rem; margin-bottom: 1rem;'>🎤</div>
-                <h3 style='color: white; margin-bottom: 1.5rem;'>कैसे उपयोग करें?</h3>
-                <div style='background: rgba(255,255,255,0.1); border-radius: 10px; padding: 1.5rem; backdrop-filter: blur(10px);'>
-                    <ol style='text-align: left; display: inline-block; color: white; line-height: 2;'>
-                        <li><strong>🔴 Record</strong> बटन दबाएं</li>
-                        <li><strong>🗣️ स्पष्ट आवाज</strong> में अपना सवाल बोलें</li>
-                        <li><strong>⏹️ Stop</strong> बटन दबाएं</li>
-                        <li><strong>🚀 "AI से पूछें"</strong> बटन दबाएं</li>
-                        <li><strong>🤖 AI का जवाब</strong> सुनें और पढ़ें</li>
-                    </ol>
-                </div>
-                <div style='margin-top: 1.5rem; padding: 1rem; background: rgba(255,255,255,0.15); border-radius: 8px;'>
-                    <p style='margin: 0; font-size: 0.9rem;'>💡 <strong>Pro Tip:</strong> शांत जगह से बोलें, साफ उच्चारण रखें</p>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            # Quick tips
-            st.markdown("---")
-            col_tip1, col_tip2, col_tip3 = st.columns(3)
-            
-            with col_tip1:
-                st.markdown("""
-                <div style='padding: 1rem; background: #e8f5e9; border-radius: 10px; text-align: center;'>
-                    <div style='font-size: 2rem;'>🎯</div>
-                    <strong style='color: #2e7d32;'>स्पष्ट बोलें</strong>
-                    <p style='font-size: 0.8rem; color: #666; margin-top: 0.5rem;'>Clear pronunciation के लिए</p>
-                </div>
-                """, unsafe_allow_html=True)
-            
-            with col_tip2:
-                st.markdown("""
-                <div style='padding: 1rem; background: #e3f2fd; border-radius: 10px; text-align: center;'>
-                    <div style='font-size: 2rem;'>🔇</div>
-                    <strong style='color: #1565c0;'>शांत जगह</strong>
-                    <p style='font-size: 0.8rem; color: #666; margin-top: 0.5rem;'>Background noise से बचें</p>
-                </div>
-                """, unsafe_allow_html=True)
-            
-            with col_tip3:
-                st.markdown("""
-                <div style='padding: 1rem; background: #fff3e0; border-radius: 10px; text-align: center;'>
-                    <div style='font-size: 2rem;'>⏱️</div>
-                    <strong style='color: #e65100;'>2-10 सेकंड</strong>
-                    <p style='font-size: 0.8rem; color: #666; margin-top: 0.5rem;'>Ideal recording length</p>
-                </div>
-                """, unsafe_allow_html=True)
+        with col_btn3:
+                if st.button("🗑️ Cancel", use_container_width=True, disabled=st.session_state.get("processing", False)):
+                    cleanup_temp_files(st.session_state.audio_path)
+                    st.session_state.audio_path = None
+                    st.session_state.transcript = ""
+                    st.session_state.ai_response = ""
+                    st.rerun()
 
-    # ===== TAB 2: CONVERSATION HISTORY =====
+       
+        # Handle the processing when user clicked the button
+        if process_btn:
+            st.session_state.processing = True
+            try:
+                with st.spinner("🤖 AI आपके सवाल को समझ रहा है... कृपया प्रतीक्षा करें..."):
+                    process_audio_query(selected_lang)
+            except Exception as e:
+                st.error(f"प्रोसेसिंग में त्रुटि: {e}")
+            finally:
+                st.session_state.processing = False
+
     with tab2:
         show_conversation_history()
 
-    # ===== TAB 3: SETTINGS =====
     with tab3:
         show_settings()
 
-    # ===== FOOTER =====
+    # Footer
     st.markdown("---")
     st.markdown("""
-    <div style='text-align: center; padding: 2rem 0; color: #666;'>
-        <p style='font-size: 1rem; margin-bottom: 0.5rem;'>
-            <strong>2024 © AgroMind</strong> • All rights reserved
-        </p>
-        <p style='font-size: 0.85rem; color: #999;'>
-            Made with ❤️ for seamless voice interaction
-        </p>
-        <p style='font-size: 0.75rem; color: #aaa; margin-top: 0.5rem;'>
-            Powered by Groq AI • Whisper V3 • Google TTS
-        </p>
+    <div class='footer'>
+        2024 © AgroMind. All rights reserved.<br>
+        <p style='font-size: 0.8rem; color: #999;'>Made with ❤️ AgroMind for seamless voice interaction</p>
     </div>
     """, unsafe_allow_html=True)
 
@@ -1165,3 +822,5 @@ def cleanup_on_session_end():
             cleanup_temp_files(st.session_state.audio_path)
     except Exception:
         pass
+    
+    
