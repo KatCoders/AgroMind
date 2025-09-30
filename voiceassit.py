@@ -531,9 +531,9 @@ def voice_assistant_feature():
                 process_audio_query(selected_lang)
            
         
-        else:
-            st.info("👆 ऊपर 🔴 Record बटन दबाएं और अपना सवाल बोलें")
-            st.markdown("""
+    else:
+              st.info("👆 ऊपर 🔴 Record बटन दबाएं और अपना सवाल बोलें")
+              st.markdown("""
             <div style='text-align: center; padding: 2rem; background: #f0f2f6; border-radius: 10px; margin-top: 1rem;'>
                 <h3 style='color: #666;'>🎯 कैसे उपयोग करें?</h3>
                 <ol style='text-align: left; display: inline-block; color: #666;'>
