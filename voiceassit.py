@@ -494,13 +494,13 @@ def voice_assistant_feature():
             with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tfile:
                 tfile.write(audio_bytes)
                 st.session_state.audio_path = tfile.name
-
+                process_audio_query(selected_lang)
             st.markdown("---")
         col_btn1, col_btn2, col_btn3 = st.columns(3)
-
+       
         with col_btn1:
                 process_btn = st.button(
-                    "🚀 AI से पूछें",
+                    "▶️ प्रोसेस करें",
                     use_container_width=True,
                     disabled=st.session_state.get("processing", False)
                 )
@@ -528,7 +528,7 @@ def voice_assistant_feature():
             st.session_state.processing = True
             try:
                 with st.spinner("🤖 AI आपके सवाल को समझ रहा है... कृपया प्रतीक्षा करें..."):
-                    process_audio_query(selected_lang)
+                     process_audio_query(selected_lang)
             except Exception as e:
                 st.error(f"प्रोसेसिंग में त्रुटि: {e}")
             finally:
