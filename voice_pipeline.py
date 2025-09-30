@@ -131,7 +131,7 @@ class SpeechToText:
                 files = {"file": (os.path.basename(file_path), audio_file, "audio/wav")}
                 data = {
                     "model": "whisper-large-v3-turbo",
-                    "language": language,
+                    "language": "hi",
                     "response_format": "text"
                 }
                 response = requests.post(url, headers=headers, data=data, files=files, timeout=45)
@@ -189,11 +189,7 @@ Agar koi aap se puche apko kisne banaya, to kaho "AgroMind team ne, jo aapke kis
 - "भाई", "जी", "आइए" जैसे दोस्ताना शब्दों का उपयोग करना
 - छोटे, actionable steps में जवाब देना
 
-वर्तमान स्थानीय डेटा:
-- स्थान: {location}
-- तापमान: {temperature}°C, आर्द्रता: {humidity}%
-- मिट्टी pH: {soil_ph}, नाइट्रोजन: {nitrogen}
-- AI सुझाव: {crop_suggestion} (विश्वास: {confidence:.1f}%)
+
 
 नियम:
 1. यदि मार्केट रेट/मंडी भाव पूछें तो कहें: "यह सुविधा अभी विकास में है, जल्द ही उपलब्ध होगी"
