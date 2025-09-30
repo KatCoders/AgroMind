@@ -715,7 +715,7 @@ def process_audio_query(selected_lang: str):
         st.success(f"✅ पूरा हुआ! ({response_time:.1f} seconds)")
         
         # Auto-rerun to reset recording interface
-        time.sleep(0.5)
+        time.sleep(60)
         st.rerun()
 
 
@@ -834,3 +834,4 @@ def cleanup_on_session_end():
             cleanup_temp_files(st.session_state.audio_path)
     except Exception:
         pass
+
