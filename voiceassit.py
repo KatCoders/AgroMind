@@ -477,11 +477,8 @@ def voice_assistant_feature():
         audio_bytes = st_audiorec()
         
       
-        if audio_bytes:
-            with st.spinner("⏳ आपकी आवाज़ प्रोसेस हो रही है... कृपया इंतज़ार करें"):
-                st.session_state.processing = True 
-                
-                time.sleep(3) 
+    if audio_bytes:
+            st.contract(" processing audio...", expanded=True)
             # Audio validation
             audio_size_kb = len(audio_bytes) / 1024
             
@@ -532,8 +529,7 @@ def voice_assistant_feature():
             
             if process_btn:
                 process_audio_query(selected_lang)
-            st.session_state.processing = False  
-            st.success("✅ Audio प्रोसेस पूरी हो गई।")
+           
         
         else:
             st.info("👆 ऊपर 🔴 Record बटन दबाएं और अपना सवाल बोलें")
