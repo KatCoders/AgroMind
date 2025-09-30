@@ -4,6 +4,7 @@ import streamlit as st
 from st_audiorec import st_audiorec
 import requests
 from gtts import gTTS
+import io
 
 # Import with error handling
 try:
@@ -13,7 +14,6 @@ except ImportError:
     get_llm_response = None
 
 # --- 🔑 Keys लोड करें (Streamlit Cloud Compatible) ---
-# Streamlit Cloud में secrets.toml से पढ़ें, local में environment variable से
 try:
     GROQ_API_KEY = st.secrets.get("GROQ_API_KEY", "").strip()
 except (FileNotFoundError, KeyError):
@@ -29,7 +29,9 @@ def get_supported_languages():
         "mr": "🇮🇳 मराठी",
         "gu": "🇮🇳 ગુજરાતી",
         "ta": "🇮🇳 தமிழ்",
-        "te": "🇮🇳 తెలుగు"
+        "te": "🇮🇳 తెలుగు",
+        "bn": "🇮🇳 বাংলা",
+        "pa": "🇮🇳 ਪੰਜਾਬੀ"
     }
 
 
@@ -45,7 +47,7 @@ def cleanup_temp_files(*file_paths):
 
 def transcribe_audio(audio_path: str, language: str = "hi") -> str:
     """
-    Groq Whisper API से आवाज़ को टेक्स्ट में बदलें
+    Groq Whisper API से आवाज़ को टेक्स्ट में बदलें (Optimized)
     
     Args:
         audio_path: ऑडियो फाइल का path
@@ -63,48 +65,80 @@ def transcribe_audio(audio_path: str, language: str = "hi") -> str:
     with open(audio_path, "rb") as f:
         files = {"file": (os.path.basename(audio_path), f, "audio/wav")}
         data = {
-            "model": "whisper-large-v3-turbo",
+            "model": "whisper-large-v3",  # More accurate than turbo
             "language": language,
-            "response_format": "text",
-            "temperature": 0.0  # More deterministic
+            "response_format": "verbose_json",  # Get confidence scores
+            "temperature": 0.0,
+            "prompt": get_language_prompt(language)  # Context hint for better accuracy
         }
-        resp = requests.post(url, headers=headers, data=data, files=files, timeout=60)
+        resp = requests.post(url, headers=headers, data=data, files=files, timeout=90)
     
     resp.raise_for_status()
-    return resp.text.strip()
+    result = resp.json()
+    
+    # Return text with confidence check
+    text = result.get("text", "").strip()
+    
+    # Log confidence if available (for debugging)
+    if "segments" in result and result["segments"]:
+        avg_confidence = sum(s.get("no_speech_prob", 0) for s in result["segments"]) / len(result["segments"])
+        if avg_confidence > 0.8:
+            st.warning("⚠️ Audio quality low. Speak clearly near microphone.")
+    
+    return text
 
 
-def text_to_speech(text: str, lang: str = "hi") -> str:
+def get_language_prompt(lang: str) -> str:
+    """Language-specific prompts for better transcription"""
+    prompts = {
+        "hi": "यह एक हिंदी वॉयस नोट है। सही शब्दों का उपयोग करें।",
+        "en": "This is a clear English voice note with proper pronunciation.",
+        "mr": "हे मराठी भाषेतील आवाज संदेश आहे।",
+        "gu": "આ ગુજરાતી ભાષામાં વૉઇસ નોંધ છે.",
+        "ta": "இது தெளிவான தமிழ் குரல் குறிப்பு.",
+        "te": "ఇది స్పష్టమైన తెలుగు వాయిస్ నోట్.",
+        "bn": "এটি একটি বাংলা ভয়েস নোট।",
+        "pa": "ਇਹ ਇੱਕ ਪੰਜਾਬੀ ਵੌਇਸ ਨੋਟ ਹੈ।"
+    }
+    return prompts.get(lang, "")
+
+
+def text_to_speech(text: str, lang: str = "hi") -> bytes:
     """
-    टेक्स्ट को आवाज़ में बदलें (gTTS)
+    टेक्स्ट को आवाज़ में बदलें (gTTS) - Returns bytes instead of file
     
     Args:
         text: बोलने के लिए टेक्स्ट
         lang: भाषा कोड
     
     Returns:
-        ऑडियो फाइल का path
+        ऑडियो bytes
     """
-    # Limit text length for TTS (gTTS has limits)
-    max_chars = 5000
+    # Limit text length for TTS
+    max_chars = 3000
     if len(text) > max_chars:
         text = text[:max_chars] + "..."
     
+    # Use faster speech rate
     tts = gTTS(text=text, lang=lang, slow=False)
-    tts_path = tempfile.NamedTemporaryFile(suffix=".mp3", delete=False).name
-    tts.save(tts_path)
-    return tts_path
+    
+    # Save to BytesIO instead of file (faster)
+    audio_bytes = io.BytesIO()
+    tts.write_to_fp(audio_bytes)
+    audio_bytes.seek(0)
+    
+    return audio_bytes.getvalue()
 
 
 def initialize_session_state():
     """Session state को initialize करें"""
     defaults = {
         "audio_path": None,
-        "tts_path": None,
         "transcript": "",
         "ai_response": "",
         "processing": False,
-        "conversation_history": []
+        "conversation_history": [],
+        "audio_quality_tips_shown": False
     }
     
     for key, value in defaults.items():
@@ -112,19 +146,33 @@ def initialize_session_state():
             st.session_state[key] = value
 
 
+def show_audio_quality_tips():
+    """Audio quality tips"""
+    if not st.session_state.audio_quality_tips_shown:
+        with st.expander("💡 बेहतर परिणाम के लिए टिप्स", expanded=True):
+            st.markdown("""
+            **सही तरीके से बोलें:**
+            - 📱 माइक्रोफोन के पास रहें (15-20 cm)
+            - 🔇 शांत जगह चुनें
+            - 🗣️ स्पष्ट और धीरे बोलें
+            - ⏸️ शब्दों के बीच छोटा pause दें
+            - 🎤 अच्छी audio quality के लिए हेडफोन माइक use करें
+            """)
+            st.session_state.audio_quality_tips_shown = True
+
+
 def voice_assistant_feature():
     """
-    🎙 Streamlit Cloud-friendly Voice Assistant
-    - रिकॉर्ड आवाज़
-    - ट्रांसक्राइब (Whisper via Groq)
-    - GPT से जवाब
-    - आवाज़ में सुने (gTTS)
+    🎙 Optimized Streamlit Cloud Voice Assistant
+    - Fast processing
+    - Better speech recognition
+    - Improved error handling
     """
     
     # Initialize session state
     initialize_session_state()
     
-    # API key check करें
+    # API key check
     if not GROQ_API_KEY:
         st.error("❌ **GROQ_API_KEY नहीं मिली!**")
         st.info("""
@@ -142,32 +190,49 @@ def voice_assistant_feature():
         st.error("❌ voice_pipeline module उपलब्ध नहीं है!")
         return
     
-    # Header
-    st.markdown("### 🎤 Voice Assistant")
+    # Header with tips
+    col_head1, col_head2 = st.columns([3, 1])
+    with col_head1:
+        st.markdown("### 🎤 Voice Assistant")
+    with col_head2:
+        if st.button("💡 Tips"):
+            st.session_state.audio_quality_tips_shown = False
+    
+    show_audio_quality_tips()
     
     # Language selector
     languages = get_supported_languages()
     col1, col2 = st.columns([3, 1])
     
-    with col2:
+    with col1:
         selected_lang = st.selectbox(
-            "भाषा",
+            "भाषा चुनें",
             options=list(languages.keys()),
             format_func=lambda x: languages[x],
-            key="language_selector",
-            label_visibility="collapsed"
+            key="language_selector"
         )
     
-    with col1:
-        st.caption(f"Selected: {languages[selected_lang]}")
+    with col2:
+       
     
     # --- 🎙 Audio Recording ---
-    st.markdown("#### 🎙️ अपनी आवाज़ रिकॉर्ड करें")
+     st.markdown("#### 🎙️ रिकॉर्ड करें")
+    
+    # Recording tips inline
+    st.caption("🔴 Record बटन दबाएं → बोलें → Stop दबाएं")
+    
     audio_bytes = st_audiorec()
     
     if audio_bytes:
         # Display recorded audio
         st.audio(audio_bytes, format="audio/wav")
+        
+        # Check audio size
+        audio_size_kb = len(audio_bytes) / 1024
+        if audio_size_kb < 5:
+            st.warning("⚠️ Audio बहुत छोटी है। 2-3 सेकंड तक बोलें।")
+        elif audio_size_kb > 1024:
+            st.warning("⚠️ Audio बहुत बड़ी है। कम बोलें या दोबारा रिकॉर्ड करें।")
         
         # Save to temporary file
         if st.session_state.audio_path:
@@ -178,21 +243,26 @@ def voice_assistant_feature():
             st.session_state.audio_path = tfile.name
         
         # Process button
-        col_btn1, col_btn2 = st.columns([2, 1])
+        col_btn1, col_btn2, col_btn3 = st.columns([2, 1, 1])
         
         with col_btn1:
             process_btn = st.button(
-                "▶ पूछें AI से",
+                "🚀 पूछें AI से",
                 type="primary",
                 use_container_width=True,
                 disabled=st.session_state.processing
             )
         
         with col_btn2:
-            if st.button("🗑️ Clear", use_container_width=True):
-                cleanup_temp_files(st.session_state.audio_path, st.session_state.tts_path)
+            if st.button("🔄 Re-record", use_container_width=True):
+                cleanup_temp_files(st.session_state.audio_path)
                 st.session_state.audio_path = None
-                st.session_state.tts_path = None
+                st.rerun()
+        
+        with col_btn3:
+            if st.button("🗑️ Clear", use_container_width=True):
+                cleanup_temp_files(st.session_state.audio_path)
+                st.session_state.audio_path = None
                 st.session_state.transcript = ""
                 st.session_state.ai_response = ""
                 st.rerun()
@@ -201,94 +271,139 @@ def voice_assistant_feature():
             st.session_state.processing = True
             transcript = ""
             
+            # Progress tracking
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+            
             # Step 1: Transcription
-            with st.spinner("🧠 आपकी आवाज़ को समझ रहे हैं..."):
-                try:
-                    transcript = transcribe_audio(st.session_state.audio_path, selected_lang)
-                    st.session_state.transcript = transcript
-                except requests.exceptions.Timeout:
-                    st.error("❌ Timeout: API response में देरी हो रही है। कृपया फिर से कोशिश करें।")
-                except requests.exceptions.RequestException as e:
-                    st.error(f"❌ API Error: {str(e)}")
-                except Exception as e:
-                    st.error(f"❌ ट्रांसक्रिप्शन असफल: {str(e)}")
+            status_text.text("🧠 आपकी आवाज़ को समझ रहे हैं... (1/3)")
+            progress_bar.progress(33)
+            
+            try:
+                transcript = transcribe_audio(st.session_state.audio_path, selected_lang)
+                st.session_state.transcript = transcript
+                
+                if not transcript:
+                    st.error("❌ कोई शब्द नहीं मिला। कृपया फिर से स्पष्ट बोलें।")
+                    st.session_state.processing = False
+                    progress_bar.empty()
+                    status_text.empty()
+                    return
+                    
+            except requests.exceptions.Timeout:
+                st.error("❌ Timeout: Network slow है। फिर से कोशिश करें।")
+                st.session_state.processing = False
+                progress_bar.empty()
+                status_text.empty()
+                return
+            except requests.exceptions.RequestException as e:
+                st.error(f"❌ API Error: {str(e)}")
+                st.info("💡 Check your internet connection और GROQ API key")
+                st.session_state.processing = False
+                progress_bar.empty()
+                status_text.empty()
+                return
+            except Exception as e:
+                st.error(f"❌ Error: {str(e)}")
+                st.session_state.processing = False
+                progress_bar.empty()
+                status_text.empty()
+                return
             
             # Step 2: Get AI Response
             if transcript:
-                st.info(f"📝 **आपने कहा:** {transcript}")
+                st.success(f"✅ **आपने कहा:** {transcript}")
                 
-                with st.spinner("💬 AI जवाब सोच रहा है..."):
-                    try:
-                        response_text = get_llm_response(transcript)
-                        st.session_state.ai_response = response_text
+                status_text.text("💬 AI जवाब तैयार कर रहा है... (2/3)")
+                progress_bar.progress(66)
+                
+                try:
+                    response_text = get_llm_response(transcript)
+                    st.session_state.ai_response = response_text
+                    
+                    if response_text:
+                        st.markdown(f"**🤖 AI का जवाब:**\n\n{response_text}")
                         
                         # Save to conversation history
                         st.session_state.conversation_history.append({
                             "user": transcript,
-                            "ai": response_text
+                            "ai": response_text,
+                            "lang": selected_lang
                         })
+                    else:
+                        st.warning("⚠️ AI से कोई जवाब नहीं मिला।")
                         
-                    except Exception as e:
-                        st.error(f"❌ AI Error: {str(e)}")
-                        response_text = ""
+                except Exception as e:
+                    st.error(f"❌ AI Error: {str(e)}")
+                    response_text = ""
                 
                 # Step 3: Text to Speech
                 if response_text:
+                    status_text.text("🎙 जवाब को आवाज़ में बदल रहे हैं... (3/3)")
+                    progress_bar.progress(90)
                     
-                    
-                    with st.spinner("🎙 जवाब को आवाज़ में बदल रहे हैं..."):
-                        try:
-                            # Cleanup old TTS file
-                            if st.session_state.tts_path:
-                                cleanup_temp_files(st.session_state.tts_path)
-                            
-                            st.session_state.tts_path = text_to_speech(response_text, selected_lang)
-                            st.audio(st.session_state.tts_path, format="audio/mp3")
-                            
-                        except Exception as e:
-                            st.error(f"❌ TTS Error: {str(e)}")
-                            st.info("💡 Tip: आप टेक्स्ट जवाब को ऊपर पढ़ सकते हैं।")
-                else:
-                    st.warning("⚠ AI से कोई जवाब नहीं मिला।")
-            else:
-                st.warning("⚠ कोई ट्रांसक्रिप्शन नहीं मिला। फिर से बोलें।")
+                    try:
+                        audio_data = text_to_speech(response_text, selected_lang)
+                        progress_bar.progress(100)
+                        status_text.text("✅ पूरा हुआ!")
+                        
+                        st.audio(audio_data, format="audio/mp3")
+                        
+                    except Exception as e:
+                        st.error(f"❌ TTS Error: {str(e)}")
+                        st.info("💡 आप टेक्स्ट जवाब ऊपर पढ़ सकते हैं।")
+                
+                # Clear progress indicators
+                progress_bar.empty()
+                status_text.empty()
             
             st.session_state.processing = False
+            
+            # Auto-scroll to response
+            st.markdown('<div id="response"></div>', unsafe_allow_html=True)
     
     else:
-        st.info("🎤 ऊपर रिकॉर्ड बटन दबाएं और बोलें...")
+        st.info("👆 ऊपर 🔴 Record बटन दबाएं और बोलें...")
     
-    # Show conversation history
+    # Show conversation history (last 5)
     if st.session_state.conversation_history:
-        with st.expander("📜 पिछली बातचीत देखें", expanded=False):
+        st.markdown("---")
+        with st.expander("📜 पिछली बातचीत", expanded=False):
             for i, conv in enumerate(reversed(st.session_state.conversation_history[-5:])):
-                st.markdown(f"**👤 You:** {conv['user']}")
-                st.markdown(f"**🤖 AI:** {conv['ai']}")
-                if i < len(st.session_state.conversation_history) - 1:
+                col_hist1, col_hist2 = st.columns([1, 20])
+                with col_hist1:
+                    st.markdown(f"**{len(st.session_state.conversation_history)-i}.**")
+                with col_hist2:
+                    st.markdown(f"**👤:** {conv['user']}")
+                    with st.expander("🤖 AI Response"):
+                        st.markdown(conv['ai'])
+                if i < min(4, len(st.session_state.conversation_history) - 1):
                     st.divider()
     
     # Footer
     st.markdown("---")
-    col_f1, col_f2 = st.columns([2, 1])
+    col_f1, col_f2, col_f3 = st.columns([2, 1, 1])
+    
     with col_f1:
-        st.caption("✨ Powered by Whisper + GPT + gTTS 🚀")
+        st.caption("✨ Powered by Whisper-v3 + GPT + gTTS")
+    
     with col_f2:
-        if st.button("🗑 Clear All History"):
+        st.caption(f"💬 {len(st.session_state.conversation_history)} conversations")
+    
+    with col_f3:
+        if st.button("🗑 Clear All"):
             st.session_state.conversation_history = []
-            cleanup_temp_files(st.session_state.audio_path, st.session_state.tts_path)
+            cleanup_temp_files(st.session_state.audio_path)
             st.session_state.audio_path = None
-            st.session_state.tts_path = None
-            st.success("✅ History cleared!")
+            st.success("✅ Cleared!")
             st.rerun()
 
 
-# Cleanup function for temp files (best effort)
+# Cleanup on session end
 def cleanup_on_session_end():
-    """Session end पर cleanup (Streamlit Cloud friendly)"""
+    """Session end पर cleanup"""
     try:
         if hasattr(st.session_state, 'audio_path'):
             cleanup_temp_files(st.session_state.audio_path)
-        if hasattr(st.session_state, 'tts_path'):
-            cleanup_temp_files(st.session_state.tts_path)
     except Exception:
         pass
