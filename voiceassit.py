@@ -480,6 +480,8 @@ def voice_assistant_feature():
         if audio_bytes:
             with st.spinner("⏳ आपकी आवाज़ प्रोसेस हो रही है... कृपया इंतज़ार करें"):
                 st.session_state.processing = True 
+                
+                time.sleep(3) 
             # Audio validation
             audio_size_kb = len(audio_bytes) / 1024
             
