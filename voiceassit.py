@@ -496,7 +496,7 @@ def voice_assistant_feature():
                 st.session_state.audio_path = tfile.name
 
             st.markdown("---")
-            col_btn1, col_btn2, col_btn3 = st.columns(3)
+        col_btn1, col_btn2, col_btn3 = st.columns(3)
 
         with col_btn1:
                 process_btn = st.button(
