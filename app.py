@@ -123,72 +123,129 @@ st.markdown("""
 # ------------------- Web Geolocation -------------------
 
 def get_location_html():
-    """Generate HTML for browser geolocation"""
-    return """
-    <div id="location-container">
-        <button id="get-location-btn" onclick="getLocation()" 
-                style="background: linear-gradient(45deg, #FF6B6B, #4ECDC4); 
-                       color: white; padding: 10px 20px; border: none; 
-                       border-radius: 20px; cursor: pointer;">
-            📍 अपना सटीक स्थान प्राप्त करें
-        </button>
-        <div id="location-status" style="margin-top: 10px; font-size: 14px;"></div>
-    </div>
 
-    <script>
-    function getLocation() {
-        const statusDiv = document.getElementById('location-status');
-        const btn = document.getElementById('get-location-btn');
-        
-        if (navigator.geolocation) {
-            btn.innerHTML = '⏳ स्थान प्राप्त कर रहे हैं...';
-            btn.disabled = true;
+    """Render geolocation component that communicates with Streamlit"""
+    components.html(
+        """
+        <div id="location-container" style="margin: 1rem 0;">
+            <button id="get-location-btn" onclick="getLocation()" 
+                    style="background: linear-gradient(135deg, #FF6B6B 0%, #4ECDC4 100%); 
+                           color: white; padding: 12px 24px; border: none; 
+                           border-radius: 25px; cursor: pointer; font-weight: 600;
+                           box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                           transition: all 0.3s; width: 100%;">
+                📍 अपना सटीक स्थान प्राप्त करें
+            </button>
+            <div id="location-status" style="margin-top: 15px; font-size: 14px; padding: 10px; border-radius: 8px;"></div>
+        </div>
+
+        <script>
+        function getLocation() {
+            const statusDiv = document.getElementById('location-status');
+            const btn = document.getElementById('get-location-btn');
             
-            navigator.geolocation.getCurrentPosition(
-                function(position) {
-                    const lat = position.coords.latitude;
-                    const lng = position.coords.longitude;
-                    const accuracy = position.coords.accuracy;
-                    
-                    statusDiv.innerHTML = `
-                        ✅ स्थान मिल गया!<br>
-                        📍 अक्षांश: ${lat.toFixed(4)}<br>
-                        📍 देशांतर: ${lng.toFixed(4)}<br>
-                        🎯 सटीकता: ${Math.round(accuracy)}m
-                    `;
-                    
-                    btn.innerHTML = '✅ स्थान प्राप्त हो गया';
-                },
-                function(error) {
-                    let errorMsg = '';
-                    switch(error.code) {
-                        case error.PERMISSION_DENIED:
-                            errorMsg = '❌ स्थान की अनुमति नहीं मिली';
-                            break;
-                        case error.POSITION_UNAVAILABLE:
-                            errorMsg = '⚠️ स्थान उपलब्ध नहीं';
-                            break;
-                        case error.TIMEOUT:
-                            errorMsg = '⏰ समय समाप्त हो गया';
-                            break;
-                        default:
-                            errorMsg = '❌ अज्ञात त्रुटि';
-                            break;
+            if (navigator.geolocation) {
+                btn.innerHTML = '⏳ स्थान प्राप्त कर रहे हैं...';
+                btn.disabled = true;
+                btn.style.opacity = '0.7';
+                
+                navigator.geolocation.getCurrentPosition(
+                    function(position) {
+                        const lat = position.coords.latitude;
+                        const lng = position.coords.longitude;
+                        const accuracy = position.coords.accuracy;
+                        
+                        // Send location data to Streamlit
+                        window.parent.postMessage({
+                            type: 'streamlit:setComponentValue',
+                            value: {
+                                latitude: lat,
+                                longitude: lng,
+                                accuracy: accuracy,
+                                success: true
+                            }
+                        }, '*');
+                        
+                        statusDiv.style.background = 'linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%)';
+                        statusDiv.style.color = '#155724';
+                        statusDiv.style.padding = '12px';
+                        statusDiv.style.borderRadius = '8px';
+                        statusDiv.style.border = '2px solid #28a745';
+                        statusDiv.innerHTML = `
+                            <strong>✅ स्थान सफलतापूर्वक मिल गया!</strong><br>
+                            📍 अक्षांश: ${lat.toFixed(6)}°<br>
+                            📍 देशांतर: ${lng.toFixed(6)}°<br>
+                            🎯 सटीकता: ${Math.round(accuracy)} मीटर<br>
+                            <small style="color: #155724;">कृपया पेज को रीफ्रेश करें</small>
+                        `;
+                        
+                        btn.innerHTML = '✅ स्थान प्राप्त हो गया';
+                        btn.style.background = '#28a745';
+                    },
+                    function(error) {
+                        let errorMsg = '';
+                        let errorDetail = '';
+                        
+                        switch(error.code) {
+                            case error.PERMISSION_DENIED:
+                                errorMsg = '❌ स्थान की अनुमति नहीं मिली';
+                                errorDetail = 'कृपया ब्राउज़र सेटिंग्स में location permission दें';
+                                break;
+                            case error.POSITION_UNAVAILABLE:
+                                errorMsg = '⚠️ स्थान की जानकारी उपलब्ध नहीं';
+                                errorDetail = 'GPS signal कमजोर हो सकता है';
+                                break;
+                            case error.TIMEOUT:
+                                errorMsg = '⏰ समय समाप्त हो गया';
+                                errorDetail = 'कृपया पुनः प्रयास करें';
+                                break;
+                            default:
+                                errorMsg = '❌ अज्ञात त्रुटि';
+                                errorDetail = 'कुछ गलत हो गया';
+                                break;
+                        }
+                        
+                        // Send error to Streamlit
+                        window.parent.postMessage({
+                            type: 'streamlit:setComponentValue',
+                            value: {
+                                success: false,
+                                error: errorMsg
+                            }
+                        }, '*');
+                        
+                        statusDiv.style.background = 'linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%)';
+                        statusDiv.style.color = '#856404';
+                        statusDiv.style.padding = '12px';
+                        statusDiv.style.borderRadius = '8px';
+                        statusDiv.style.border = '2px solid #ffc107';
+                        statusDiv.innerHTML = `
+                            <strong>${errorMsg}</strong><br>
+                            ${errorDetail}<br>
+                            <small>IP आधारित स्थान का उपयोग कर रहे हैं</small>
+                        `;
+                        btn.innerHTML = '📍 पुनः प्रयास करें';
+                        btn.disabled = false;
+                        btn.style.opacity = '1';
+                    },
+                    {
+                        enableHighAccuracy: true,
+                        timeout: 10000,
+                        maximumAge: 0
                     }
-                    statusDiv.innerHTML = errorMsg + '<br><small>IP आधारित स्थान का उपयोग कर रहे हैं</small>';
-                    btn.innerHTML = '📍 पुनः प्रयास करें';
-                    btn.disabled = false;
-                }
-            );
-        } else {
-            statusDiv.innerHTML = '❌ यह ब्राउज़र geolocation समर्थित नहीं करता';
+                );
+            } else {
+                statusDiv.style.background = 'linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%)';
+                statusDiv.style.color = '#721c24';
+                statusDiv.style.padding = '12px';
+                statusDiv.style.borderRadius = '8px';
+                statusDiv.innerHTML = '❌ यह ब्राउज़र geolocation समर्थित नहीं करता';
+            }
         }
-    }
-    </script>
-    """
-
-
-
+        </script>
+        """,
+        height=150,
+    )
 
 
 
@@ -319,11 +376,33 @@ def get_default_weather_data() -> Dict[str, Any]:
 @st.cache_data(ttl=3600, show_spinner=False)
 def get_user_location() -> Tuple[float, float, str]:
     """Get user location with HTML geolocation support"""
-    # Check if HTML geolocation data is available
-    if st.session_state.html_location:
-        lat = st.session_state.html_location.get("lat", 28.61)
-        lon = st.session_state.html_location.get("lng", 77.20)
-        return lat, lon, "HTML Geolocation"
+     # Check if client-side location is available in session state
+    if "client_location" in st.session_state and st.session_state.client_location:
+        loc_data = st.session_state.client_location
+        if loc_data.get("success"):
+            lat = loc_data.get("latitude", 28.61)
+            lon = loc_data.get("longitude", 28.61)
+            
+            # Try to get city name from reverse geocoding
+            try:
+                response = requests.get(
+                    f"https://nominatim.openstreetmap.org/reverse",
+                    params={
+                        "lat": lat,
+                        "lon": lon,
+                        "format": "json",
+                        "accept-language": "hi"
+                    },
+                    headers={"User-Agent": "AgroMind-App/1.0"},
+                    timeout=5
+                )
+                if response.status_code == 200:
+                    data = response.json()
+                    address = data.get("address", {})
+                    city = address.get("city") or address.get("town") or address.get("village") or "आपका स्थान"
+                    return lat, lon, f"📍 {city}"
+            except:
+                return lat, lon, "📍 आपका स्थान (GPS)"
     
     # Fallback to IP-based location
     try:
@@ -338,11 +417,11 @@ def get_user_location() -> Tuple[float, float, str]:
             if region and region != city:
                 location_name += f", {region}"
                 
-            return float(loc[0]), float(loc[1]), location_name
+            return float(loc[0]), float(loc[1]), f"{location_name} (IP)"
     except Exception as e:
         logger.warning(f"Location fetch failed: {e}")
     
-    return 28.61, 77.20, "दिल्ली"  
+    return 28.61, 77.20, "दिल्ली (डिफ़ॉल्ट)"
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def fetch_soil(lat: float, lon: float) -> Dict[str, float]:
@@ -563,17 +642,118 @@ with st.sidebar:
 # ------------------- Enhanced Groq LLM setup -------------------
 
 # ------------------- Voice Input Section -------------------
+
+st.markdown("""
+<style>
+.chat-container {
+    background-color: #000000;  
+    color: #FFFFFF;           
+    padding: 20px;
+    border-radius: 15px;
+    box-shadow: 0px 4px 10px rgba(0,0,0,0.5);
+    margin-top: 20px;
+    margin-bottom: 20px;
+    font-family: 'Segoe UI', sans-serif;
+}
+.chat-container h4 {
+    font-size: 1.8rem;
+    margin-bottom: 10px;
+    color: #00FF7F;
+}
+.chat-container ul li {
+    margin-bottom: 5px;
+}
+.chat-container em {
+    color: #FFD700;
+}
+</style>
+
+<div class="chat-container">
+    <h4>👋 नमस्ते किसान भाई!</h4>
+    <p>मैं आपका AI कृषि सलाहकार हूं। आप मुझसे निम्नलिखित विषयों पर सवाल पूछ सकते हैं:</p>
+    <ul>
+        <li>🌾 <strong>फसल की सिफारिश</strong> - कौन सी फसल बोएं</li>
+        <li>🌱 <strong>मिट्टी की देखभाल</strong> - मिट्टी सुधार के तरीके</li>
+        <li>🌧️ <strong>मौसम आधारित सलाह</strong> - मौसम के अनुसार खेती</li>
+        <li>🐛 <strong>कीट और रोग नियंत्रण</strong> - समस्याओं का समाधान</li>
+        <li>💧 <strong>सिंचाई प्रबंधन</strong> - पानी की सही व्यवस्था</li>
+        <li>🌿 <strong>जैविक खेती</strong> - प्राकृतिक तरीके</li>
+    </ul>
+    <p><em>आप टेक्स्ट लिखकर या आवाज़ में सवाल पूछ सकते हैं!</em></p>
+</div>
+""", unsafe_allow_html=True)
 st.subheader("🎤 आवाज़ से सवाल पूछें")
 st.caption("अपनी आवाज़ की फ़ाइल अपलोड करें (WAV/MP3)")
 
 col1, col2, col3 = st.columns([1, 2, 1])
+
+
+with col1:
+    st.markdown("""
+        <div style="
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px; 
+            border-radius: 16px; 
+            box-shadow: 0 8px 16px rgba(0,0,0,0.15);
+            margin-bottom: 20px;
+        ">
+            <h3 style="color: white; text-align: center; margin: 0;">
+                🌾 किसान सहायक पोर्टल
+            </h3>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    # Tabs for different sections
+    tab1, tab3 = st.tabs(["📤 अपलोड", "💡 टिप्स"])
+    
+    with tab1:
+        st.markdown("""
+            <div style="
+                background-color: #f8f9fa;
+                padding: 15px;
+                border-radius: 12px;
+                margin-bottom: 15px;
+            ">
+                <h4 style="color: #0d6efd; margin-bottom: 15px;">📁 फ़ाइल अपलोड करें</h4>
+            </div>
+        """, unsafe_allow_html=True)
+        
+        # Audio Upload Section
+ 
+        st.markdown("---")
+        
+      
+    
+    with tab3:
+          
+            
+           
+                st.markdown("""
+                **✅ करें:**
+                - 📱 माइक्रोफोन के पास रहें (15-20 cm)
+                - 🔇 शांत जगह चुनें
+                - 🗣️ स्पष्ट और धीरे बोलें
+                - ⏸️ शब्दों के बीच छोटा pause दें
+                """)
+            
+           
+                st.markdown("""
+                **❌ न करें:**
+                - 🚫 तेज आवाज में न चिल्लाएं
+                - 🚫 बहुत तेज या बहुत धीरे न बोलें
+                - 🚫 शोर वाली जगह से रिकॉर्ड न करें
+                - 🚫 माइक को हाथ से न ढकें
+                """)
+        
+        # Call Agent Button
+   
 with col2:
     components.html(
     """
     <elevenlabs-convai agent-id="agent_3701k6p18w13ea6v401gdr3wpqsf"></elevenlabs-convai>
     <script src="https://unpkg.com/@elevenlabs/convai-widget-embed" async type="text/javascript"></script>
     """,
-    height=150,  # जरूरत अनुसार बदल सकते हो
+    height=350,  # जरूरत अनुसार बदल सकते हो
 )
     audio_file = st.file_uploader("अपनी आवाज़ फ़ाइल अपलोड करें", type=["wav", "mp3"])
 
@@ -629,48 +809,6 @@ if audio_file:
                 logger.error(f"Voice error: {e}", exc_info=True)
             finally:
                 st.session_state.processing = False
-
-else:
-   st.markdown("""
-<style>
-.chat-container {
-    background-color: #000000;  
-    color: #FFFFFF;           
-    padding: 20px;
-    border-radius: 15px;
-    box-shadow: 0px 4px 10px rgba(0,0,0,0.5);
-    margin-top: 20px;
-    margin-bottom: 20px;
-    font-family: 'Segoe UI', sans-serif;
-}
-.chat-container h4 {
-    font-size: 1.8rem;
-    margin-bottom: 10px;
-    color: #00FF7F;
-}
-.chat-container ul li {
-    margin-bottom: 5px;
-}
-.chat-container em {
-    color: #FFD700;
-}
-</style>
-
-<div class="chat-container">
-    <h4>👋 नमस्ते किसान भाई!</h4>
-    <p>मैं आपका AI कृषि सलाहकार हूं। आप मुझसे निम्नलिखित विषयों पर सवाल पूछ सकते हैं:</p>
-    <ul>
-        <li>🌾 <strong>फसल की सिफारिश</strong> - कौन सी फसल बोएं</li>
-        <li>🌱 <strong>मिट्टी की देखभाल</strong> - मिट्टी सुधार के तरीके</li>
-        <li>🌧️ <strong>मौसम आधारित सलाह</strong> - मौसम के अनुसार खेती</li>
-        <li>🐛 <strong>कीट और रोग नियंत्रण</strong> - समस्याओं का समाधान</li>
-        <li>💧 <strong>सिंचाई प्रबंधन</strong> - पानी की सही व्यवस्था</li>
-        <li>🌿 <strong>जैविक खेती</strong> - प्राकृतिक तरीके</li>
-    </ul>
-    <p><em>आप टेक्स्ट लिखकर या आवाज़ में सवाल पूछ सकते हैं!</em></p>
-</div>
-""", unsafe_allow_html=True)
-
 
 # ------------------- Enhanced Text Input Section -------------------
 def process_text_input(user_input: str):
@@ -861,4 +999,3 @@ st.markdown("""
     </small></p>
 </div>
 """, unsafe_allow_html=True)
-
