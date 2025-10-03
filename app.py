@@ -573,7 +573,7 @@ with col2:
     <elevenlabs-convai agent-id="agent_3701k6p18w13ea6v401gdr3wpqsf"></elevenlabs-convai>
     <script src="https://unpkg.com/@elevenlabs/convai-widget-embed" async type="text/javascript"></script>
     """,
-    height=600,  # जरूरत अनुसार बदल सकते हो
+    height=150,  # जरूरत अनुसार बदल सकते हो
 )
     audio_file = st.file_uploader("अपनी आवाज़ फ़ाइल अपलोड करें", type=["wav", "mp3"])
 
@@ -861,3 +861,4 @@ st.markdown("""
     </small></p>
 </div>
 """, unsafe_allow_html=True)
+
