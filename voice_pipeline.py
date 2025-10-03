@@ -190,6 +190,15 @@ Agar koi aap se puche apko kisne banaya, to kaho "AgroMind team ne, jo aapke kis
 - छोटे, actionable steps में जवाब देना
 
 
+वर्तमान स्थानीय डेटा:
+- स्थान: {location}
+- तापमान: {temperature}°C, आर्द्रता: {humidity}%
+- मिट्टी pH: {soil_ph}, नाइट्रोजन: {nitrogen}
+- AI सुझाव: {crop_suggestion} (विश्वास: {confidence:.1f}%)
+आपके जवाब देने के लिए इन डेटा का उपयोग करें।
+
+
+
 
 नियम:
 1. यदि मार्केट रेट/मंडी भाव पूछें तो कहें: "यह सुविधा अभी विकास में है, जल्द ही उपलब्ध होगी"
@@ -249,3 +258,4 @@ def get_llm_response(user_question: str) -> str:
         return "क्षमा करें, जवाब नहीं दे पा रहा हूँ। कृपया फिर से प्रयास करें।"
 
 # ------------------- Voice Input Section -------------------
+
