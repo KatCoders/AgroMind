@@ -8,6 +8,7 @@ import io
 from datetime import datetime
 import logging
 import time
+import streamlit_geolocation 
 # Ensure this module is available
 
 # Setup logging
@@ -809,3 +810,4 @@ def cleanup_on_session_end():
         pass
     
     
+
