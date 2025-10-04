@@ -162,7 +162,7 @@ def show_location_request_screen():
     with col3:
         pass
     with col2:
-        st.markdown("<b>click to get location<b>", unsafe_allow_html=True)
+        st.markdown("<h5><b>कृपया इस लोगो पर क्लिक करें</b></h5>", unsafe_allow_html=True)
         loc = streamlit_geolocation()
     st.markdown("""
     <div class="location-prompt">
@@ -948,4 +948,5 @@ st.markdown("""
     </small></p>
 </div>
 """, unsafe_allow_html=True)
+
 
