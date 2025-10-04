@@ -1,4 +1,3 @@
-
 import os
 import io
 import time
@@ -20,11 +19,13 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import StandardScaler
 from voiceassit import voice_assistant_feature
 import streamlit.components.v1 as components
+from streamlit_geolocation import streamlit_geolocation 
 
 # Langchain / Groq imports
 from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
+
 # ------------------- Safe TTS Warm-up -------------------
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -32,7 +33,6 @@ logger = logging.getLogger(__name__)
 # ------------------- Load environment variables -------------------
 load_dotenv()
 WEATHER_API_KEY = os.getenv("WEATHER_API_KEY", "").strip()
-
 
 # ------------------- Page config & Enhanced CSS -------------------
 st.set_page_config(
@@ -54,6 +54,34 @@ st.markdown("""
         font-size: 2.2rem; 
         margin-bottom: 1rem; 
         text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+    }
+    .location-prompt {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        padding: 3rem;
+        border-radius: 20px;
+        text-align: center;
+        color: white;
+        margin: 2rem auto;
+        max-width: 600px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    }
+    .location-prompt h2 {
+        font-size: 2rem;
+        margin-bottom: 1rem;
+    }
+    .location-prompt p {
+        font-size: 1.1rem;
+        margin-bottom: 1.5rem;
+        opacity: 0.9;
+    }
+    .location-icon {
+        font-size: 4rem;
+        margin-bottom: 1rem;
+        animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+        0%, 100% { transform: scale(1); }
+        50% { transform: scale(1.1); }
     }
     .voice-section { 
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
@@ -91,175 +119,16 @@ st.markdown("""
         box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         margin: 0.5rem 0;
     }
-    .status-success {
-        background-color: #d4edda;
-        color: #155724;
-        padding: 0.5rem;
-        border-radius: 4px;
-        border: 1px solid #c3e6cb;
-    }
-    .status-error {
-        background-color: #f8d7da;
-        color: #721c24;
-        padding: 0.5rem;
-        border-radius: 4px;
-        border: 1px solid #f5c6cb;
-    }
-    .status-info {
-        background-color: #d1ecf1;
-        color: #0c5460;
-        padding: 0.5rem;
-        border-radius: 4px;
-        border: 1px solid #bee5eb;
-    }
-    .loading-spinner {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        padding: 1rem;
-    }
 </style>
 """, unsafe_allow_html=True)
-# ------------------- Web Geolocation -------------------
-
-def get_location_html():
-
-    """Render geolocation component that communicates with Streamlit"""
-    components.html(
-        """
-        <div id="location-container" style="margin: 1rem 0;">
-            <button id="get-location-btn" onclick="getLocation()" 
-                    style="background: linear-gradient(135deg, #FF6B6B 0%, #4ECDC4 100%); 
-                           color: white; padding: 12px 24px; border: none; 
-                           border-radius: 25px; cursor: pointer; font-weight: 600;
-                           box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-                           transition: all 0.3s; width: 100%;">
-                📍 अपना सटीक स्थान प्राप्त करें
-            </button>
-            <div id="location-status" style="margin-top: 15px; font-size: 14px; padding: 10px; border-radius: 8px;"></div>
-        </div>
-
-        <script>
-        function getLocation() {
-            const statusDiv = document.getElementById('location-status');
-            const btn = document.getElementById('get-location-btn');
-            
-            if (navigator.geolocation) {
-                btn.innerHTML = '⏳ स्थान प्राप्त कर रहे हैं...';
-                btn.disabled = true;
-                btn.style.opacity = '0.7';
-                
-                navigator.geolocation.getCurrentPosition(
-                    function(position) {
-                        const lat = position.coords.latitude;
-                        const lng = position.coords.longitude;
-                        const accuracy = position.coords.accuracy;
-                        
-                        // Send location data to Streamlit
-                        window.parent.postMessage({
-                            type: 'streamlit:setComponentValue',
-                            value: {
-                                latitude: lat,
-                                longitude: lng,
-                                accuracy: accuracy,
-                                success: true
-                            }
-                        }, '*');
-                        
-                        statusDiv.style.background = 'linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%)';
-                        statusDiv.style.color = '#155724';
-                        statusDiv.style.padding = '12px';
-                        statusDiv.style.borderRadius = '8px';
-                        statusDiv.style.border = '2px solid #28a745';
-                        statusDiv.innerHTML = `
-                            <strong>✅ स्थान सफलतापूर्वक मिल गया!</strong><br>
-                            📍 अक्षांश: ${lat.toFixed(6)}°<br>
-                            📍 देशांतर: ${lng.toFixed(6)}°<br>
-                            🎯 सटीकता: ${Math.round(accuracy)} मीटर<br>
-                            <small style="color: #155724;">कृपया पेज को रीफ्रेश करें</small>
-                        `;
-                        
-                        btn.innerHTML = '✅ स्थान प्राप्त हो गया';
-                        btn.style.background = '#28a745';
-                    },
-                    function(error) {
-                        let errorMsg = '';
-                        let errorDetail = '';
-                        
-                        switch(error.code) {
-                            case error.PERMISSION_DENIED:
-                                errorMsg = '❌ स्थान की अनुमति नहीं मिली';
-                                errorDetail = 'कृपया ब्राउज़र सेटिंग्स में location permission दें';
-                                break;
-                            case error.POSITION_UNAVAILABLE:
-                                errorMsg = '⚠️ स्थान की जानकारी उपलब्ध नहीं';
-                                errorDetail = 'GPS signal कमजोर हो सकता है';
-                                break;
-                            case error.TIMEOUT:
-                                errorMsg = '⏰ समय समाप्त हो गया';
-                                errorDetail = 'कृपया पुनः प्रयास करें';
-                                break;
-                            default:
-                                errorMsg = '❌ अज्ञात त्रुटि';
-                                errorDetail = 'कुछ गलत हो गया';
-                                break;
-                        }
-                        
-                        // Send error to Streamlit
-                        window.parent.postMessage({
-                            type: 'streamlit:setComponentValue',
-                            value: {
-                                success: false,
-                                error: errorMsg
-                            }
-                        }, '*');
-                        
-                        statusDiv.style.background = 'linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%)';
-                        statusDiv.style.color = '#856404';
-                        statusDiv.style.padding = '12px';
-                        statusDiv.style.borderRadius = '8px';
-                        statusDiv.style.border = '2px solid #ffc107';
-                        statusDiv.innerHTML = `
-                            <strong>${errorMsg}</strong><br>
-                            ${errorDetail}<br>
-                            <small>IP आधारित स्थान का उपयोग कर रहे हैं</small>
-                        `;
-                        btn.innerHTML = '📍 पुनः प्रयास करें';
-                        btn.disabled = false;
-                        btn.style.opacity = '1';
-                    },
-                    {
-                        enableHighAccuracy: true,
-                        timeout: 10000,
-                        maximumAge: 0
-                    }
-                );
-            } else {
-                statusDiv.style.background = 'linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%)';
-                statusDiv.style.color = '#721c24';
-                statusDiv.style.padding = '12px';
-                statusDiv.style.borderRadius = '8px';
-                statusDiv.innerHTML = '❌ यह ब्राउज़र geolocation समर्थित नहीं करता';
-            }
-        }
-        </script>
-        """,
-        height=150,
-    )
-
-
-
-
-
-
-
 
 # ------------------- Session state initialization -------------------
 def init_session_state():
-     """Initialize all session state variables"""
-     if "app_initialized" not in st.session_state:
+    """Initialize all session state variables"""
+    if "app_initialized" not in st.session_state:
         st.session_state.update({
             "app_initialized": False,
+            "location_granted": False,
             "tts_system_ready": False,
             "stt_warmed": False,
             "chat_history": [],
@@ -270,86 +139,125 @@ def init_session_state():
             "auto_play_response": True,
             "use_offline_tts": False,
             "location_method": "ip",
-            "html_location": None,
+            "client_location": None,
             "warmup_status": "प्रारंभ कर रहे हैं...",
             "tts_system": UnifiedTTSSystem(),
-            "stt": SpeechToText()
+            "stt": SpeechToText(),
+            "user_lat": None,
+            "user_lon": None,
+            "user_city": None
         })
-
-    
 
 init_session_state()
 
-if "tts_system" not in st.session_state:
-    st.session_state.tts_system = UnifiedTTSSystem()
+# ------------------- Location Request Screen -------------------
+
+  
+def show_location_request_screen():
+    """Display location permission request screen"""
+    st.markdown('<h1 class="main-title">🌾 AI आधारित फसल सलाह सहायक</h1>', unsafe_allow_html=True)
+    col1, col2, col3 = st.columns([2, 3, 1])
+    with col1:
+        pass
+    with col3:
+        pass
+    with col2:
+        st.markdown("<b>click to get location<b>", unsafe_allow_html=True)
+        loc = streamlit_geolocation()
+    st.markdown("""
+    <div class="location-prompt">
+        <div class="location-icon">📍</div>
+        <h2>स्थान की अनुमति चाहिए</h2>
+        <p>आपकी सटीक कृषि सलाह के लिए हमें आपके स्थान की जरूरत है।</p>
+        <p style="font-size: 0.9rem;">
+            ✅ मौसम आधारित सलाह<br>
+            ✅ स्थानीय मिट्टी की जानकारी<br>
+            ✅ क्षेत्रीय फसल सुझाव
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Get location using streamlit_geolocation
+   
+    # Check if location is received
+    if loc and isinstance(loc, dict):
+        lat = loc.get("latitude")
+        lon = loc.get("longitude")
+        
+        if lat is not None and lon is not None:
+            # Location granted - save to session state
+            st.session_state.user_lat = lat
+            st.session_state.user_lon = lon
+            st.session_state.location_granted = True
+            
+            # Get city name
+            try:
+                response = requests.get(
+                    "https://nominatim.openstreetmap.org/reverse",
+                    params={
+                        "lat": lat,
+                        "lon": lon,
+                        "format": "json",
+                        "accept-language": "hi"
+                    },
+                    headers={"User-Agent": "AgroMind-App/1.0"},
+                    timeout=5
+                )
+                if response.status_code == 200:
+                    data = response.json()
+                    address = data.get("address", {})
+                    city = (address.get("city") or 
+                           address.get("town") or 
+                           address.get("village") or 
+                           address.get("state_district") or
+                           "आपका स्थान")
+                    st.session_state.user_city = f"📍 {city}"
+            except:
+                st.session_state.user_city = "📍 आपका स्थान (GPS)"
+            
+            st.success("✅ स्थान प्राप्त हो गया! ऐप लोड हो रहा है...")
+            time.sleep(1)
+            st.rerun()
+    else:
+        # Show instruction and fallback option
+        st.info("👆 कृपया अपने ब्राउज़र में स्थान की अनुमति दें")
+        
+        st.markdown("---")
+        st.markdown("### या")
+        
+        if st.button("🌐 IP आधारित स्थान का उपयोग करें", type="secondary"):
+            try:
+                response = requests.get("https://ipinfo.io/json", timeout=8)
+                if response.status_code == 200:
+                    data = response.json()
+                    loc_str = data.get("loc", "28.61,77.20").split(",")
+                    city = data.get("city", "दिल्ली")
+                    region = data.get("region", "")
+                    
+                    st.session_state.user_lat = float(loc_str[0])
+                    st.session_state.user_lon = float(loc_str[1])
+                    st.session_state.user_city = f"🌐 {city}, {region} (IP)"
+                    st.session_state.location_granted = True
+                    
+                    st.success("✅ IP आधारित स्थान प्राप्त हो गया!")
+                    time.sleep(1)
+                    st.rerun()
+            except Exception as e:
+                st.error(f"❌ स्थान प्राप्त नहीं हो सका: {str(e)}")
+
+# ------------------- Check Location Permission -------------------
+if not st.session_state.location_granted:
+    show_location_request_screen()
+    st.stop()  # Stop execution until location is granted
+
+# ------------------- Main App (Only loads after location permission) -------------------
+
+# Now we have location, continue with the rest of your app
+lat = st.session_state.user_lat
+lon = st.session_state.user_lon
+city = st.session_state.user_city
 
 st.markdown('<h1 class="main-title">🌾 AI आधारित फसल सलाह सहायक (हिंदी, आवाज़ सहित)</h1>', unsafe_allow_html=True)
-# Enhanced initialization with better UX
-def perform_comprehensive_warmup():
-    """Perform comprehensive system warmup with progress tracking"""
-    if st.session_state.app_initialized:
-        return True
-    
-    progress_container = st.container()
-    
-    with progress_container:
-        progress_bar = st.progress(0)
-        status_text = st.empty()
-        
-        warmup_steps = [
-            ("🔧 सिस्टम प्रारंभ...", 15),
-            ("🎤 आवाज़ सिस्टम तैयार कर रहे हैं...", 35),
-            ("🔊 TTS सिस्टम वार्म अप...", 55),
-            ("🌐 API कनेक्शन जांच...", 70),
-            ("📊 डेटा सोर्स कनेक्ट...", 85),
-            ("✅ सभी सिस्टम तैयार!", 100)
-        ]
-        
-        for step_text, progress_value in warmup_steps:
-            status_text.markdown(f'<div class="warmup-status">{step_text}</div>', unsafe_allow_html=True)
-            progress_bar.progress(progress_value)
-            
-            # Actual warmup operations
-            if progress_value == 35:  # STT warmup simulation
-                try:
-                    test_response = requests.get(
-                        "https://api.groq.com/openai/v1/models", 
-                        headers={"Authorization": f"Bearer {GROQ_API_KEY}"}, 
-                        timeout=5
-                    )
-                    if test_response.status_code == 200:
-                        st.session_state.stt_warmed = True
-                        st.session_state.warmup_status = "STT API तैयार ✅"
-                    else:
-                        st.session_state.warmup_status = "STT API में समस्या ⚠️"
-                except Exception as e:
-                    st.session_state.stt_warmed = False
-                    st.session_state.warmup_status = "STT API में समस्या ⚠️"
-                    logger.error(f"STT warmup failed: {e}")
-            
-            elif progress_value == 55:  # TTS warmup
-                try:
-                    tts_success = True
-                    st.session_state.tts_system_ready = True
-
-                    st.session_state.tts_system_ready = tts_success
-                    if tts_success:
-                        st.session_state.warmup_status = "TTS सिस्टम तैयार ✅"
-                    else:
-                        st.session_state.warmup_status = "TTS सिस्टम में समस्या ⚠️"
-                except Exception as e:
-                    logger.error(f"TTS warmup failed: {e}")
-                    st.session_state.tts_system_ready = False
-                    st.session_state.warmup_status = "TTS त्रुटि ❌"
-            
-            time.sleep(0.6)
-        
-        time.sleep(1)
-        progress_container.empty()
-    
-    st.session_state.app_initialized = True
-    return True
-perform_comprehensive_warmup()
 
 # ------------------- Enhanced utility functions -------------------
 def get_default_soil_data() -> Dict[str, float]:
@@ -374,60 +282,9 @@ def get_default_weather_data() -> Dict[str, Any]:
     }
 
 @st.cache_data(ttl=3600, show_spinner=False)
-def get_user_location() -> Tuple[float, float, str]:
-    """Get user location with HTML geolocation support"""
-     # Check if client-side location is available in session state
-    if "client_location" in st.session_state and st.session_state.client_location:
-        loc_data = st.session_state.client_location
-        if loc_data.get("success"):
-            lat = loc_data.get("latitude", 28.61)
-            lon = loc_data.get("longitude", 28.61)
-            
-            # Try to get city name from reverse geocoding
-            try:
-                response = requests.get(
-                    f"https://nominatim.openstreetmap.org/reverse",
-                    params={
-                        "lat": lat,
-                        "lon": lon,
-                        "format": "json",
-                        "accept-language": "hi"
-                    },
-                    headers={"User-Agent": "AgroMind-App/1.0"},
-                    timeout=5
-                )
-                if response.status_code == 200:
-                    data = response.json()
-                    address = data.get("address", {})
-                    city = address.get("city") or address.get("town") or address.get("village") or "आपका स्थान"
-                    return lat, lon, f"📍 {city}"
-            except:
-                return lat, lon, "📍 आपका स्थान (GPS)"
-    
-    # Fallback to IP-based location
-    try:
-        response = requests.get("https://ipinfo.io/json", timeout=8)
-        if response.status_code == 200:
-            data = response.json()
-            loc = data.get("loc", "28.61,77.20").split(",")
-            city = data.get("city", "दिल्ली")
-            region = data.get("region", "")
-            
-            location_name = f"{city}"
-            if region and region != city:
-                location_name += f", {region}"
-                
-            return float(loc[0]), float(loc[1]), f"{location_name} (IP)"
-    except Exception as e:
-        logger.warning(f"Location fetch failed: {e}")
-    
-    return 28.61, 77.20, "दिल्ली (डिफ़ॉल्ट)"
-
-@st.cache_data(ttl=3600, show_spinner=False)
 def fetch_soil(lat: float, lon: float) -> Dict[str, float]:
     """Fetch soil data with better error handling and realistic defaults"""
     try:
-        # Using a more reliable approach for soil data
         url = "https://rest.isric.org/soilgrids/v2.0/properties"
         params = {
             "lon": lon,
@@ -439,26 +296,18 @@ def fetch_soil(lat: float, lon: float) -> Dict[str, float]:
         
         response = requests.get(url, params=params, timeout=10)
         if response.status_code == 200:
-            # For demo purposes, return realistic values based on location
-            # In production, you would parse the actual SoilGrids response
             base_soil = get_default_soil_data()
-            
-            # Adjust values slightly based on location for realism
-            lat_factor = (lat - 20) / 20  # Normalize around typical Indian latitudes
-            
+            lat_factor = (lat - 20) / 20
             base_soil["ph"] += lat_factor * 0.5
             base_soil["nitrogen"] += lat_factor * 10
-            
             return base_soil
             
-    except requests.RequestException as e:
-        logger.warning(f"Soil data fetch failed: {e}")
     except Exception as e:
         logger.error(f"Unexpected error in soil data fetch: {e}")
     
     return get_default_soil_data()
 
-@st.cache_data(ttl=600, show_spinner=False)  # 10 minute cache for weather
+@st.cache_data(ttl=600, show_spinner=False)
 def fetch_weather(lat: float, lon: float) -> Dict[str, Any]:
     """Fetch weather data with comprehensive error handling"""
     if not WEATHER_API_KEY:
@@ -486,15 +335,119 @@ def fetch_weather(lat: float, lon: float) -> Dict[str, Any]:
                 "feels_like": current.get("feelslike_c", 25),
                 "uv": current.get("uv", 5)
             }
-        else:
-            logger.warning(f"Weather API returned status {response.status_code}")
             
-    except requests.RequestException as e:
-        logger.warning(f"Weather data fetch failed: {e}")
     except Exception as e:
         logger.error(f"Unexpected error in weather data fetch: {e}")
     
     return get_default_weather_data()
+
+# ------------------- Enhanced ML model -------------------
+@st.cache_resource(show_spinner=False)
+def get_trained_model() -> Tuple[RandomForestClassifier, StandardScaler]:
+    """Create and train enhanced ML model"""
+    np.random.seed(42)
+    n_samples = 2000
+    
+    features = []
+    labels = []
+    
+    for _ in range(n_samples):
+        temp = np.random.normal(25, 10)
+        humidity = np.random.normal(70, 20)
+        ph = np.random.normal(6.5, 1.2)
+        nitrogen = np.random.normal(50, 25)
+        
+        features.append([temp, humidity, ph, nitrogen])
+        
+        if temp < 22 and humidity > 55 and ph > 6.0:
+            labels.append(0)  # गेहूँ
+        elif temp > 28 and humidity > 75 and ph < 7.5:
+            labels.append(1)  # धान
+        elif temp > 20 and temp < 35 and humidity < 80:
+            labels.append(2)  # मक्का
+        else:
+            labels.append(np.random.choice([0, 1, 2]))
+    
+    X = np.array(features)
+    y = np.array(labels)
+    
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X)
+    
+    clf = RandomForestClassifier(
+        n_estimators=150,
+        max_depth=10,
+        min_samples_split=5,
+        min_samples_leaf=2,
+        random_state=42
+    )
+    clf.fit(X_scaled, y)
+    
+    return clf, scaler
+
+def get_crop_prediction(soil: Dict[str, float], weather: Dict[str, Any]) -> Tuple[str, float]:
+    """Get crop prediction with confidence score"""
+    try:
+        clf, scaler = get_trained_model()
+        
+        features = np.array([[
+            weather.get("temperature", 25),
+            weather.get("humidity", 70),
+            soil.get("ph", 6.5),
+            soil.get("nitrogen", 50)
+        ]])
+        
+        features_scaled = scaler.transform(features)
+        probabilities = clf.predict_proba(features_scaled)[0]
+        prediction = int(clf.predict(features_scaled)[0])
+        
+        crop_map = {0: "🌾 गेहूँ", 1: "🌱 धान", 2: "🌽 मक्का"}
+        confidence = float(max(probabilities) * 100)
+        
+        return crop_map.get(prediction, "❓ अज्ञात"), confidence
+        
+    except Exception as e:
+        logger.error(f"Crop prediction failed: {e}")
+        return "🌾 गेहूँ", 75.0
+
+# Enhanced initialization with better UX
+def perform_comprehensive_warmup():
+    """Perform comprehensive system warmup with progress tracking"""
+    if st.session_state.app_initialized:
+        return True
+    
+    progress_container = st.container()
+    
+    with progress_container:
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+        
+        warmup_steps = [
+            ("🔧 सिस्टम प्रारंभ...", 20),
+            ("🎤 आवाज़ सिस्टम तैयार...", 50),
+            ("🔊 TTS सिस्टम वार्म अप...", 70),
+            ("📊 डेटा लोड...", 90),
+            ("✅ तैयार!", 100)
+        ]
+        
+        for step_text, progress_value in warmup_steps:
+            status_text.markdown(f'<div class="status-info">{step_text}</div>', unsafe_allow_html=True)
+            progress_bar.progress(progress_value)
+            time.sleep(0.3)
+        
+        time.sleep(0.5)
+        progress_container.empty()
+    
+    st.session_state.app_initialized = True
+    return True
+
+perform_comprehensive_warmup()
+
+# ------------------- Load environmental data -------------------
+with st.spinner("🌍 पर्यावरण डेटा लोड कर रहे हैं..."):
+    soil_data = fetch_soil(lat, lon)
+    weather_data = fetch_weather(lat, lon)
+
 
 # ------------------- Enhanced ML model -------------------
 @st.cache_resource(show_spinner=False)
@@ -570,11 +523,7 @@ def get_crop_prediction(soil: Dict[str, float], weather: Dict[str, Any]) -> Tupl
         logger.error(f"Crop prediction failed: {e}")
         return "🌾 गेहूँ", 75.0
 
-# ------------------- Load environmental data -------------------
-with st.spinner("🌍 स्थान और पर्यावरण डेटा लोड कर रहे हैं..."):
-    lat, lon, city = get_user_location()
-    soil_data = fetch_soil(lat, lon)
-    weather_data = fetch_weather(lat, lon)
+
 
 # ------------------- Enhanced Sidebar -------------------
 with st.sidebar:
@@ -753,7 +702,7 @@ with col2:
     <elevenlabs-convai agent-id="agent_3701k6p18w13ea6v401gdr3wpqsf"></elevenlabs-convai>
     <script src="https://unpkg.com/@elevenlabs/convai-widget-embed" async type="text/javascript"></script>
     """,
-    height=350,  # जरूरत अनुसार बदल सकते हो
+    height=400,  # जरूरत अनुसार बदल सकते हो
 )
     audio_file = st.file_uploader("अपनी आवाज़ फ़ाइल अपलोड करें", type=["wav", "mp3"])
 
