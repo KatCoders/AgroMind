@@ -1,6 +1,7 @@
 # Web / Streamlit
 streamlit
 streamlit-webrtc
+streamlit-geolocation
 
 # Data handling
 numpy
@@ -25,3 +26,4 @@ langchain-core
 gTTS
 pydub
 av
+
