@@ -152,7 +152,6 @@ init_session_state()
 
 # ------------------- Location Request Screen -------------------
 
-  
 def show_location_request_screen():
     """Display location permission request screen"""
     st.markdown('<h1 class="main-title">🌾 AI आधारित फसल सलाह सहायक</h1>', unsafe_allow_html=True)
@@ -448,83 +447,6 @@ with st.spinner("🌍 पर्यावरण डेटा लोड कर र
     soil_data = fetch_soil(lat, lon)
     weather_data = fetch_weather(lat, lon)
 
-
-# ------------------- Enhanced ML model -------------------
-@st.cache_resource(show_spinner=False)
-def get_trained_model() -> Tuple[RandomForestClassifier, StandardScaler]:
-    """Create and train enhanced ML model"""
-    np.random.seed(42)
-    n_samples = 2000  # More training data
-    
-    features = []
-    labels = []
-    
-    # Generate more diverse and realistic training data
-    for _ in range(n_samples):
-        temp = np.random.normal(25, 10)
-        humidity = np.random.normal(70, 20)
-        ph = np.random.normal(6.5, 1.2)
-        nitrogen = np.random.normal(50, 25)
-        
-        features.append([temp, humidity, ph, nitrogen])
-        
-        # Enhanced decision logic for crop recommendation
-        if temp < 22 and humidity > 55 and ph > 6.0:
-            labels.append(0)  # गेहूँ
-        elif temp > 28 and humidity > 75 and ph < 7.5:
-            labels.append(1)  # धान
-        elif temp > 20 and temp < 35 and humidity < 80:
-            labels.append(2)  # मक्का
-        else:
-            # Random assignment for edge cases
-            labels.append(np.random.choice([0, 1, 2]))
-    
-    X = np.array(features)
-    y = np.array(labels)
-    
-    # Feature scaling
-    scaler = StandardScaler()
-    X_scaled = scaler.fit_transform(X)
-    
-    # Train model with better parameters
-    clf = RandomForestClassifier(
-        n_estimators=150,
-        max_depth=10,
-        min_samples_split=5,
-        min_samples_leaf=2,
-        random_state=42
-    )
-    clf.fit(X_scaled, y)
-    
-    return clf, scaler
-
-def get_crop_prediction(soil: Dict[str, float], weather: Dict[str, Any]) -> Tuple[str, float]:
-    """Get crop prediction with confidence score"""
-    try:
-        clf, scaler = get_trained_model()
-        
-        features = np.array([[
-            weather.get("temperature", 25),
-            weather.get("humidity", 70),
-            soil.get("ph", 6.5),
-            soil.get("nitrogen", 50)
-        ]])
-        
-        features_scaled = scaler.transform(features)
-        probabilities = clf.predict_proba(features_scaled)[0]
-        prediction = int(clf.predict(features_scaled)[0])
-        
-        crop_map = {0: "🌾 गेहूँ", 1: "🌱 धान", 2: "🌽 मक्का"}
-        confidence = float(max(probabilities) * 100)
-        
-        return crop_map.get(prediction, "❓ अज्ञात"), confidence
-        
-    except Exception as e:
-        logger.error(f"Crop prediction failed: {e}")
-        return "🌾 गेहूँ", 75.0
-
-
-
 # ------------------- Enhanced Sidebar -------------------
 with st.sidebar:
     st.header("🎛️ नियंत्रण पैनल")
@@ -586,9 +508,13 @@ with st.sidebar:
     
     # Enhanced confidence display
     confidence_color = "green" if confidence > 80 else "orange" if confidence > 60 else "red"
-    st.markdown(f"विश्वास स्तर: :{confidence_color}[{confidence:.1f}%]")
+    st.markdown(f"विश्वास स्तर: <span style='color:{confidence_color}; font-weight:bold'>{confidence:.1f}%</span>", unsafe_allow_html=True)
 
 # ------------------- Enhanced Groq LLM setup -------------------
+# TODO: Define or import the actual LLM chain and get_llm_response function
+def get_llm_response(query_text):
+    # Placeholder: Replace with actual LLM API call
+    return f"({query_text} का डेमो उत्तर)"
 
 # ------------------- Voice Input Section -------------------
 
@@ -636,7 +562,6 @@ st.caption("अपनी आवाज़ की फ़ाइल अपलोड 
 
 col1, col2, col3 = st.columns([1, 2, 1])
 
-
 with col1:
     st.markdown("""
         <div style="
@@ -666,36 +591,24 @@ with col1:
                 <h4 style="color: #0d6efd; margin-bottom: 15px;">📁 फ़ाइल अपलोड करें</h4>
             </div>
         """, unsafe_allow_html=True)
-        
-        # Audio Upload Section
- 
         st.markdown("---")
-        
-      
     
     with tab3:
-          
-            
-           
-                st.markdown("""
-                **✅ करें:**
-                - 📱 माइक्रोफोन के पास रहें (15-20 cm)
-                - 🔇 शांत जगह चुनें
-                - 🗣️ स्पष्ट और धीरे बोलें
-                - ⏸️ शब्दों के बीच छोटा pause दें
-                """)
-            
-           
-                st.markdown("""
-                **❌ न करें:**
-                - 🚫 तेज आवाज में न चिल्लाएं
-                - 🚫 बहुत तेज या बहुत धीरे न बोलें
-                - 🚫 शोर वाली जगह से रिकॉर्ड न करें
-                - 🚫 माइक को हाथ से न ढकें
-                """)
-        
-        # Call Agent Button
-   
+        st.markdown("""
+            **✅ करें:**
+            - 📱 माइक्रोफोन के पास रहें (15-20 cm)
+            - 🔇 शांत जगह चुनें
+            - 🗣️ स्पष्ट और धीरे बोलें
+            - ⏸️ शब्दों के बीच छोटा pause दें
+        """)
+        st.markdown("""
+            **❌ न करें:**
+            - 🚫 तेज आवाज में न चिल्लाएं
+            - 🚫 बहुत तेज या बहुत धीरे न बोलें
+            - 🚫 शोर वाली जगह से रिकॉर्ड न करें
+            - 🚫 माइक को हाथ से न ढकें
+        """)
+
 with col2:
     components.html(
     """
@@ -733,25 +646,22 @@ if audio_file:
                     st.info(f"📝 **{voice_text}**")
                     
                     # LLM response
-                with st.spinner("🤖 जवाब तैयार कर रहे हैं..."):
+                    with st.spinner("🤖 जवाब तैयार कर रहे हैं..."):
                         response = get_llm_response(voice_text)
                     
-                
-                        
-                        # TTS
-                if st.session_state.get("voice_enabled", False):
-                     with st.spinner("🎧 आवाज़ तैयार कर रहे हैं..."):
-                                try:
-                                    audio_bytes = st.session_state.tts_system.generate_audio(response)
-                                    if audio_bytes:
-                                        st.audio(audio_bytes, format="audio/mp3")
-                                        st.success("🔊 तैयार!")
-                                except Exception as tts_error:
-                                    logger.warning(f"TTS failed: {tts_error}")
-                                    st.info("💡 टेक्स्ट पढ़ें")
-                          
-                else:
-                    st.warning("⚠️ आवाज़ स्पष्ट नहीं थी")
+                    # TTS
+                    if st.session_state.get("voice_enabled", False):
+                        with st.spinner("🎧 आवाज़ तैयार कर रहे हैं..."):
+                            try:
+                                audio_bytes = st.session_state.tts_system.generate_audio(response)
+                                if audio_bytes:
+                                    st.audio(audio_bytes, format="audio/mp3")
+                                    st.success("🔊 तैयार!")
+                            except Exception as tts_error:
+                                logger.warning(f"TTS failed: {tts_error}")
+                                st.info("💡 टेक्स्ट पढ़ें")
+                    else:
+                        st.warning("⚠️ आवाज़ स्पष्ट नहीं थी")
                     
             except Exception as e:
                 st.error(f"❌ त्रुटि: {str(e)}")
@@ -773,7 +683,6 @@ def process_text_input(user_input: str):
             st.markdown(f"✍️ {user_input}")
         
         # Save to history
-   
         # LLM response
         with st.chat_message("assistant"):
             response_placeholder = st.empty()
@@ -781,23 +690,14 @@ def process_text_input(user_input: str):
             
             full_response = ""
             try:
-                for chunk in chain.stream({
-                    "question": user_input,
-                    "location": city,
-                    "temperature": weather_data.get('temperature', 25),
-                    "humidity": weather_data.get('humidity', 70),
-                    "soil_ph": soil_data.get('ph', 6.5),
-                    "nitrogen": soil_data.get('nitrogen', 50),
-                    "crop_suggestion": predicted_crop,
-                    "confidence": confidence
-                }):
-                    full_response += chunk
-                    response_placeholder.markdown(f"🤖 {full_response}")
-                    
+                # Placeholder logic, replace with LLM chain logic if available
+                response = get_llm_response(user_input)
+                full_response = response
+                response_placeholder.markdown(f"🤖 {full_response}")
             except Exception as e:
                 error_msg = f"जवाब तैयार करने में समस्या: {str(e)}"
                 response_placeholder.error(f"❌ {error_msg}")
-                full_response = "क्षमा करें, तकनीकी समस्या के कारण जवाब नहीं दे सका। कृपया फिर से कोशिश करें।"
+                full_response = "क्षमा करें, तकनीकी समस्या के कारण जवाब नहीं दे सका। कृपया फिर से प्रयास करें।"
                 logger.error(f"LLM generation error: {e}")
         
         st.session_state.chat_history.append({
@@ -906,17 +806,17 @@ for i, (col, question) in enumerate(zip([col1, col2, col3], quick_questions)):
 with st.expander("ℹ️ मदद और जानकारी", expanded=False):
     st.markdown("""
     ### 🔧 कैसे इस्तेमाल करें:
-    
+
     **आवाज़ से सवाल पूछने के लिए:**
     1. 🎤 "रिकॉर्ड" बटन दबाएं
     2. स्पष्ट आवाज़ में अपना सवाल बोलें
     3. "स्टॉप" दबाकर रिकॉर्डिंग बंद करें  
     4. "जवाब पाएं" बटन दबाएं
-    
+
     **टेक्स्ट से सवाल पूछने के लिए:**
     1. नीचे टेक्स्ट बॉक्स में अपना सवाल लिखें
     2. Enter दबाएं या भेजें बटन दबाएं
-    
+
     ### 🌾 मैं किन विषयों में मदद कर सकता हूं:
     - फसल चुनने की सलाह (मौसम और मिट्टी के अनुसार)
     - मिट्टी सुधार के तरीके
@@ -925,12 +825,12 @@ with st.expander("ℹ️ मदद और जानकारी", expanded=False
     - खाद और उर्वरक की जानकारी
     - जैविक खेती के नुस्खे
     - मौसम के अनुसार खेती की योजना
-    
+
     ### ⚠️ महत्वपूर्ण सूचना:
     - यह एक AI सहायक है और दी गई सभी सलाह केवल सुझाव हैं
     - महत्वपूर्ण कृषि निर्णयों के लिए स्थानीय कृषि विशेषज्ञ से परामर्श लें
     - मार्केट रेट की जानकारी अभी उपलब्ध नहीं है (जल्द आएगी)
-    
+
     ### 🛠️ तकनीकी सहायता:
     - यदि आवाज़ पहचान में समस्या हो तो शांत जगह से बात करें
     - इंटरनेट कनेक्शन धीमा होने पर थोड़ा इंतज़ार करें
@@ -948,6 +848,3 @@ st.markdown("""
     </small></p>
 </div>
 """, unsafe_allow_html=True)
-
-
-
