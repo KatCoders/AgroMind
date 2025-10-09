@@ -510,11 +510,7 @@ with st.sidebar:
     confidence_color = "green" if confidence > 80 else "orange" if confidence > 60 else "red"
     st.markdown(f"विश्वास स्तर: <span style='color:{confidence_color}; font-weight:bold'>{confidence:.1f}%</span>", unsafe_allow_html=True)
 
-# ------------------- Enhanced Groq LLM setup -------------------
-# TODO: Define or import the actual LLM chain and get_llm_response function
-def get_llm_response(query_text):
-    # Placeholder: Replace with actual LLM API call
-    return f"({query_text} का डेमो उत्तर)"
+# ------------------- Enhanced Groq LLM setup -----------------
 
 # ------------------- Voice Input Section -------------------
 
@@ -848,3 +844,4 @@ st.markdown("""
     </small></p>
 </div>
 """, unsafe_allow_html=True)
+
