@@ -33,6 +33,7 @@ logger = logging.getLogger(__name__)
 # ------------------- Load environment variables -------------------
 load_dotenv()
 WEATHER_API_KEY = os.getenv("WEATHER_API_KEY", "").strip()
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "").strip()
 
 # ------------------- Page config & Enhanced CSS -------------------
 st.set_page_config(
@@ -176,8 +177,6 @@ def show_location_request_screen():
     </div>
     """, unsafe_allow_html=True)
     
-    # Get location using streamlit_geolocation
-   
     # Check if location is received
     if loc and isinstance(loc, dict):
         lat = loc.get("latitude")
@@ -447,6 +446,77 @@ with st.spinner("🌍 पर्यावरण डेटा लोड कर र
     soil_data = fetch_soil(lat, lon)
     weather_data = fetch_weather(lat, lon)
 
+# ------------------- Enhanced Groq LLM setup -------------------
+@st.cache_resource(show_spinner=False)
+def get_llm_chain():
+    """Initialize Groq LLM with optimized settings"""
+    try:
+        if not GROQ_API_KEY:
+            logger.error("GROQ_API_KEY not found in environment")
+            return None
+            
+        llm = ChatGroq(
+            temperature=0.7,
+            model_name="llama-3.3-70b-versatile",
+            groq_api_key=GROQ_API_KEY
+        )
+        
+        prompt_template = ChatPromptTemplate.from_messages([
+            ("system", """आप एक अनुभवी भारतीय कृषि विशेषज्ञ हैं। 
+आपको किसानों को उनकी स्थानीय परिस्थितियों के अनुसार सलाह देनी है।
+
+वर्तमान डेटा:
+- स्थान: {city}
+- मौसम: तापमान {temperature}°C, आर्द्रता {humidity}%, स्थिति: {condition}
+- मिट्टी pH: {ph}, नाइट्रोजन: {nitrogen}
+- सुझाई गई फसल: {predicted_crop} (विश्वास: {confidence}%)
+
+हमेशा हिंदी में स्पष्ट, व्यावहारिक और संक्षिप्त सलाह दें। 
+किसान की भाषा में बात करें और सीधे मुद्दे पर आएं।
+अपने जवाब में निम्नलिखित बिंदु शामिल करें जब उपयुक्त हो:
+1. तुरंत क्या करना चाहिए
+2. क्यों यह महत्वपूर्ण है
+3. व्यावहारिक सुझाव या विकल्प
+
+3-5 वाक्यों में जवाब दें।"""),
+            ("human", "{question}")
+        ])
+        
+        chain = prompt_template | llm | StrOutputParser()
+        return chain
+        
+    except Exception as e:
+        logger.error(f"Failed to initialize LLM: {e}")
+        return None
+
+def get_llm_response(user_query: str) -> str:
+    """Get response from LLM with context"""
+    try:
+        chain = get_llm_chain()
+        if not chain:
+            return "क्षमा करें, AI सेवा अभी उपलब्ध नहीं है। कृपया सुनिश्चित करें कि GROQ_API_KEY सेट है।"
+        
+        # Get current crop prediction
+        predicted_crop, confidence = get_crop_prediction(soil_data, weather_data)
+        
+        response = chain.invoke({
+            "city": st.session_state.get("user_city", "आपका स्थान"),
+            "temperature": weather_data.get("temperature", 25),
+            "humidity": weather_data.get("humidity", 70),
+            "condition": weather_data.get("condition", "साफ़"),
+            "ph": soil_data.get("ph", 6.5),
+            "nitrogen": soil_data.get("nitrogen", 50),
+            "predicted_crop": predicted_crop,
+            "confidence": f"{confidence:.1f}",
+            "question": user_query
+        })
+        
+        return response.strip()
+        
+    except Exception as e:
+        logger.error(f"LLM response error: {e}")
+        return f"क्षमा करें, जवाब तैयार करने में समस्या आई: {str(e)}\n\nकृपया सुनिश्चित करें कि आपकी .env फाइल में GROQ_API_KEY सही तरीके से सेट है।"
+
 # ------------------- Enhanced Sidebar -------------------
 with st.sidebar:
     st.header("🎛️ नियंत्रण पैनल")
@@ -509,8 +579,6 @@ with st.sidebar:
     # Enhanced confidence display
     confidence_color = "green" if confidence > 80 else "orange" if confidence > 60 else "red"
     st.markdown(f"विश्वास स्तर: <span style='color:{confidence_color}; font-weight:bold'>{confidence:.1f}%</span>", unsafe_allow_html=True)
-
-# ------------------- Enhanced Groq LLM setup -----------------
 
 # ------------------- Voice Input Section -------------------
 
@@ -611,7 +679,7 @@ with col2:
    <elevenlabs-convai agent-id="agent_9301k6w0hb3bf1zbf0pjd1wqwhex"></elevenlabs-convai>
    <script src="https://unpkg.com/@elevenlabs/convai-widget-embed" async type="text/javascript"></script>
     """,
-    height=400,  # जरूरत अनुसार बदल सकते हो
+    height=400,
 )
     audio_file = st.file_uploader("अपनी आवाज़ फ़ाइल अपलोड करें", type=["wav", "mp3"])
 
@@ -645,6 +713,22 @@ if audio_file:
                     with st.spinner("🤖 जवाब तैयार कर रहे हैं..."):
                         response = get_llm_response(voice_text)
                     
+                    st.success(f"🤖 {response}")
+                    
+                    # Save to chat history
+                    st.session_state.chat_history.append({
+                        "role": "user",
+                        "content": voice_text,
+                        "type": "voice",
+                        "timestamp": datetime.now().isoformat()
+                    })
+                    st.session_state.chat_history.append({
+                        "role": "assistant",
+                        "content": response,
+                        "type": "text",
+                        "timestamp": datetime.now().isoformat()
+                    })
+                    
                     # TTS
                     if st.session_state.get("voice_enabled", False):
                         with st.spinner("🎧 आवाज़ तैयार कर रहे हैं..."):
@@ -656,8 +740,8 @@ if audio_file:
                             except Exception as tts_error:
                                 logger.warning(f"TTS failed: {tts_error}")
                                 st.info("💡 टेक्स्ट पढ़ें")
-                    else:
-                        st.warning("⚠️ आवाज़ स्पष्ट नहीं थी")
+                else:
+                    st.warning("⚠️ आवाज़ स्पष्ट नहीं थी")
                     
             except Exception as e:
                 st.error(f"❌ त्रुटि: {str(e)}")
@@ -678,24 +762,7 @@ def process_text_input(user_input: str):
         with st.chat_message("user"):
             st.markdown(f"✍️ {user_input}")
         
-        # Save to history
-        # LLM response
-        with st.chat_message("assistant"):
-            response_placeholder = st.empty()
-            response_placeholder.markdown("🤖 सोच रहा हूं... 🧠")
-            
-            full_response = ""
-            try:
-                # Placeholder logic, replace with LLM chain logic if available
-                response = get_llm_response(user_input)
-                full_response = response
-                response_placeholder.markdown(f"🤖 {full_response}")
-            except Exception as e:
-                error_msg = f"जवाब तैयार करने में समस्या: {str(e)}"
-                response_placeholder.error(f"❌ {error_msg}")
-                full_response = "क्षमा करें, तकनीकी समस्या के कारण जवाब नहीं दे सका। कृपया फिर से प्रयास करें।"
-                logger.error(f"LLM generation error: {e}")
-        
+        # Save user message to history
         st.session_state.chat_history.append({
             "role": "user", 
             "content": user_input, 
@@ -703,22 +770,68 @@ def process_text_input(user_input: str):
             "timestamp": datetime.now().isoformat()
         })
     
+        # LLM response
+        with st.chat_message("assistant"):
+            response_placeholder = st.empty()
+            response_placeholder.markdown("🤖 सोच रहा हूं... 🧠")
+            
+            full_response = ""
+            try:
+                response = get_llm_response(user_input)
+                full_response = response
+                response_placeholder.markdown(f"🤖 {full_response}")
+                
+                # Save assistant response to history
+                st.session_state.chat_history.append({
+                    "role": "assistant",
+                    "content": full_response,
+                    "type": "text",
+                    "timestamp": datetime.now().isoformat()
+                })
+                
+            except Exception as e:
+                error_msg = f"जवाब तैयार करने में समस्या: {str(e)}"
+                response_placeholder.error(f"❌ {error_msg}")
+                full_response = "क्षमा करें, तकनीकी समस्या के कारण जवाब नहीं दे सका। कृपया फिर से प्रयास करें।"
+                logger.error(f"LLM generation error: {e}")
+        
         # Generate audio - NO THREADING, direct call
         if st.session_state.voice_enabled and full_response:
             with st.spinner("🎧 आवाज़ में तैयार कर रहे हैं..."):
-                audio_bytes = st.session_state.tts_system.generate_audio(full_response)
+                try:
+                    audio_bytes = st.session_state.tts_system.generate_audio(full_response)
 
-                if audio_bytes:
-                    st.audio(audio_bytes, format="audio/mp3")
-                    st.success("🔊 तैयार!")
-                else:
-                    st.info("💡 टेक्स्ट जवाब तैयार है, लेकिन आवाज़ नहीं बनाई जा सकी।")
+                    if audio_bytes:
+                        st.audio(audio_bytes, format="audio/mp3")
+                        st.success("🔊 तैयार!")
+                    else:
+                        st.info("💡 टेक्स्ट जवाब तैयार है, लेकिन आवाज़ नहीं बनाई जा सकी।")
+                except Exception as tts_error:
+                    logger.warning(f"TTS generation failed: {tts_error}")
+                    st.info("💡 टेक्स्ट जवाब तैयार है")
 
     except Exception as e:
         st.error(f"❌ प्रोसेसिंग में समस्या: {str(e)}")
         logger.error(f"Text processing error: {e}")
     finally:
         st.session_state.processing = False
+
+# Display chat history
+if st.session_state.chat_history:
+    st.markdown("---")
+    st.subheader("💬 बातचीत का इतिहास")
+    
+    for message in st.session_state.chat_history:
+        role = message.get("role", "user")
+        content = message.get("content", "")
+        msg_type = message.get("type", "text")
+        
+        with st.chat_message(role):
+            icon = "🎤" if msg_type == "voice" else "✍️"
+            if role == "user":
+                st.markdown(f"{icon} {content}")
+            else:
+                st.markdown(f"🤖 {content}")
 
 # Handle chat input
 if user_input := st.chat_input("✍️ अपना सवाल यहाँ लिखें..."):
@@ -831,17 +944,21 @@ with st.expander("ℹ️ मदद और जानकारी", expanded=False
     - यदि आवाज़ पहचान में समस्या हो तो शांत जगह से बात करें
     - इंटरनेट कनेक्शन धीमा होने पर थोड़ा इंतज़ार करें
     - किसी भी समस्या के लिए "चैट रीसेट करें" बटन का उपयोग करें
+    
+    ### 🔑 API Keys आवश्यक:
+    - कृपया सुनिश्चित करें कि आपकी .env फ़ाइल में निम्नलिखित keys हैं:
+    - `GROQ_API_KEY` - Groq AI के लिए (मुफ्त में प्राप्त करें: https://console.groq.com)
+    - `WEATHER_API_KEY` - WeatherAPI के लिए (मुफ्त में प्राप्त करें: https://www.weatherapi.com)
     """)
 
 # Footer with credits and version info
 st.markdown("""
 <div style='text-align: center; color: #666; margin-top: 2rem; padding: 1rem; border-top: 1px solid #ddd;'>
-    <p>🌾 <strong>AI कृषि सहायक(By AgroMind)</strong> - आपके खेत का डिजिटल मित्र</p>
-    <p><small>संस्करण 2.0 | Powered by Groq AI , SoilGrids & OpenWeatherMap</small></p>
+    <p>🌾 <strong>AI कृषि सहायक (By AgroMind)</strong> - आपके खेत का डिजिटल मित्र</p>
+    <p><small>संस्करण 2.0 | Powered by Groq AI, SoilGrids & WeatherAPI</small></p>
     <p><small>
         सभी सलाह केवल सूचनात्मक उद्देश्यों के लिए हैं। 
         महत्वपूर्ण कृषि निर्णयों के लिए स्थानीय कृषि विशेषज्ञ से परामर्श अवश्य लें।
     </small></p>
 </div>
 """, unsafe_allow_html=True)
-
