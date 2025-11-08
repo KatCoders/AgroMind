@@ -155,7 +155,7 @@ init_session_state()
 
 def show_location_request_screen():
     """Display location permission request screen"""
-    st.markdown('<h1 class="main-title">🌾 AI आधारित फसल सलाह सहायक</h1>', unsafe_allow_html=True)
+    st.markdown('<h1 class="main-title">🌾 KRISH आधारित फसल सलाह सहायक</h1>', unsafe_allow_html=True)
     col1, col2, col3 = st.columns([2, 3, 1])
     with col1:
         pass
@@ -255,7 +255,7 @@ lat = st.session_state.user_lat
 lon = st.session_state.user_lon
 city = st.session_state.user_city
 
-st.markdown('<h1 class="main-title">🌾 AI आधारित फसल सलाह सहायक (हिंदी, आवाज़ सहित)</h1>', unsafe_allow_html=True)
+st.markdown('<h1 class="main-title">🌾 KRISH आधारित फसल सलाह सहायक (हिंदी, आवाज़ सहित)</h1>', unsafe_allow_html=True)
 
 # ------------------- Enhanced utility functions -------------------
 def get_default_soil_data() -> Dict[str, float]:
@@ -962,4 +962,5 @@ st.markdown("""
     </small></p>
 </div>
 """, unsafe_allow_html=True)
+
 
